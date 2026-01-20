@@ -153,6 +153,49 @@
   - [x] useChat에 apiKey 옵션 전달
 - **테스트**: API 키 입력 및 저장 확인 ✅
 
+### Phase 12: Multi-Provider 지원 (Claude + Gemini) ✅
+
+- [x] 12.1 타입 정의 확장 (chat.ts)
+  - [x] Provider 타입 추가 ("claude" | "gemini")
+  - [x] GeminiModel 타입 추가
+  - [x] AIModel 통합 타입 (ClaudeModel | GeminiModel)
+  - [x] GEMINI_MODELS 상수 배열
+  - [x] MODELS_BY_PROVIDER 매핑 객체
+  - [x] ChatRequest에 provider 필드 추가
+- [x] 12.2 API 키 관리 확장 (useApiKey.ts)
+  - [x] useSyncExternalStore로 localStorage 동기화
+  - [x] Provider별 API 키 관리 (claude, gemini)
+  - [x] selectedProvider 상태 관리
+  - [x] needsApiKey(provider) 함수
+- [x] 12.3 API Route 분기 (route.ts)
+  - [x] Provider별 API 엔드포인트 분기
+  - [x] Gemini API 호출 (streamGenerateContent)
+  - [x] Gemini 웹 검색 도구 (google_search)
+  - [x] Provider별 에러 처리
+- [x] 12.4 스트리밍 파서 분기 (useStreamResponse.ts)
+  - [x] parseClaudeStream 함수
+  - [x] parseGeminiStream 함수
+  - [x] Gemini groundingMetadata 파싱
+  - [x] Provider별 Citation 변환
+- [x] 12.5 UI 컴포넌트 수정
+  - [x] Provider 선택 버튼 그룹 (ChatInput)
+  - [x] Gemini Sparkle SVG 아이콘
+  - [x] Provider별 테마 색상 (globals.css)
+  - [x] ChatHeader Provider 표시
+  - [x] ApiKeyDialog 탭 UI (Claude/Gemini)
+  - [x] shadcn/ui Tabs 컴포넌트 추가
+- [x] 12.6 통합 (ChatContainer, useChat)
+  - [x] Provider 상태 동기화
+  - [x] Provider 변경 시 모델 자동 선택
+  - [x] API 키 없으면 다이얼로그 자동 표시
+- [x] 12.7 E2E 테스트 (e2e/multi-provider.spec.ts)
+  - [x] Provider 선택 버튼 표시
+  - [x] Provider 전환 UI 변경
+  - [x] Provider별 모델 목록 변경
+  - [x] Claude/Gemini 스트리밍 테스트
+  - [x] API Key 다이얼로그 탭 테스트
+- **테스트 결과**: 10/10 통과 ✅
+
 ---
 
 ## 파일 구조
@@ -162,21 +205,21 @@ src/
 ├── app/
 │   ├── api/
 │   │   └── chat/
-│   │       └── route.ts          # Claude API 프록시 (웹 검색 포함)
-│   ├── globals.css               # 공통 색상 변수
+│   │       └── route.ts          # Multi-Provider API 프록시 (Claude + Gemini)
+│   ├── globals.css               # 공통 색상 변수 + Provider 테마
 │   ├── layout.tsx
 │   └── page.tsx                  # ChatContainer
 ├── components/
 │   ├── chat/
-│   │   ├── ChatContainer.tsx
-│   │   ├── ChatHeader.tsx
+│   │   ├── ChatContainer.tsx     # Provider 상태 통합 관리
+│   │   ├── ChatHeader.tsx        # Provider별 아이콘/제목 표시
 │   │   ├── MessageList.tsx
 │   │   ├── MessageBubble.tsx     # 검색 결과 + Citations 표시
-│   │   ├── ChatInput.tsx         # 모델 선택 + 웹 검색 토글 + 정지 버튼
+│   │   ├── ChatInput.tsx         # Provider 선택 + 모델 선택 + 웹 검색 토글
 │   │   ├── SearchResults.tsx     # 검색 쿼리 결과 UI
 │   │   ├── ErrorBanner.tsx       # 에러 표시 UI
 │   │   ├── CodeBlock.tsx         # 구문 강조 + 복사 버튼
-│   │   ├── ApiKeyDialog.tsx      # API 키 입력 모달
+│   │   ├── ApiKeyDialog.tsx      # API 키 입력 모달 (탭 UI)
 │   │   └── MarkdownRenderer.tsx
 │   └── ui/
 │       ├── button.tsx            # shadcn
@@ -186,19 +229,21 @@ src/
 │       ├── switch.tsx            # shadcn (웹 검색 토글)
 │       ├── dialog.tsx            # shadcn (모달 다이얼로그)
 │       ├── input.tsx             # shadcn (텍스트 입력)
+│       ├── tabs.tsx              # shadcn (Provider 탭)
 │       └── loading-dots.tsx
 ├── hooks/
-│   ├── useStreamResponse.ts      # 검색 결과 파싱 + AbortController
-│   ├── useChat.ts                # 웹 검색 상태 + 정지/에러 관리
-│   └── useApiKey.ts              # API 키 localStorage 관리
+│   ├── useStreamResponse.ts      # Provider별 스트림 파싱 (Claude/Gemini)
+│   ├── useChat.ts                # Provider 상태 + 정지/에러 관리
+│   └── useApiKey.ts              # Provider별 API 키 관리 (useSyncExternalStore)
 ├── types/
-│   └── chat.ts                   # SearchQuery, Citation 타입 포함
+│   └── chat.ts                   # Provider, AIModel, Gemini 타입 포함
 └── lib/
     └── utils.ts                  # shadcn cn 유틸
 
 e2e/                              # Playwright E2E 테스트
 ├── chat.spec.ts                  # UI 기본 기능 테스트
-└── sse-streaming.spec.ts         # SSE 스트리밍 테스트 (더미 데이터)
+├── sse-streaming.spec.ts         # SSE 스트리밍 테스트 (Claude)
+└── multi-provider.spec.ts        # Multi-Provider 테스트
 ```
 
 ---
@@ -252,11 +297,20 @@ pnpm run dev
 
 ## 모델 옵션
 
+### Claude (Anthropic)
+
 | 모델             | 설명                    |
 | ---------------- | ----------------------- |
 | Claude Sonnet 4  | 균형 잡힌 성능 (기본값) |
 | Claude Opus 4    | 최고 성능               |
 | Claude 3.5 Haiku | 최고 속도               |
+
+### Gemini (Google)
+
+| 모델             | 설명         |
+| ---------------- | ------------ |
+| Gemini 2.5 Flash | 빠른 응답    |
+| Gemini 2.0 Flash | 안정적 성능  |
 
 ---
 
@@ -275,6 +329,7 @@ pnpm run dev
 | Phase 9  | ✅ 완료 | 2026-01-20 |
 | Phase 10 | ✅ 완료 | 2026-01-20 |
 | Phase 11 | ✅ 완료 | 2026-01-20 |
+| Phase 12 | ✅ 완료 | 2026-01-20 |
 
 ---
 
@@ -293,6 +348,9 @@ pnpm run dev
 - **코드 블록 구문 강조** (Prism + oneDark 테마)
 - **코드 복사 버튼** (언어 라벨, 복사됨 피드백)
 - **API 키 관리** (입력 모달, localStorage 저장, 설정 버튼)
+- **Multi-Provider 지원** (Claude + Gemini 전환)
+- **Provider별 테마** (색상, 아이콘 구분)
+- **Gemini 웹 검색** (Google Search Grounding)
 
 ### 기술적 특징
 
@@ -302,10 +360,12 @@ pnpm run dev
 - shadcn/ui 컴포넌트 활용
 - 공통 색상 시스템 (CSS 변수)
 - **Claude web_search_20250305 도구 통합**
+- **Gemini google_search 도구 통합**
 - **실시간 검색 결과 스트리밍 파싱**
 - **AbortController 기반 스트림 중단**
 - **react-syntax-highlighter 구문 강조**
-- **Playwright E2E 테스트 (19개 테스트 케이스)**
+- **Playwright E2E 테스트**
+- **useSyncExternalStore를 활용한 localStorage 동기화**
 
 ### 향후 개선 가능 사항
 
@@ -319,3 +379,4 @@ pnpm run dev
 - 정지 시 부분 응답 저장 옵션
 - rate_limit_error 시 자동 재시도
 - 라이트/다크 모드별 코드 테마 변경
+- 추가 Provider 지원 (OpenAI GPT 등)

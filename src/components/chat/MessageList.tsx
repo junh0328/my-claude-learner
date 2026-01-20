@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Message, SearchQuery } from "@/types/chat";
+import { Message, SearchQuery, Provider } from "@/types/chat";
 import { MessageBubble } from "./MessageBubble";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { SearchResults } from "./SearchResults";
@@ -23,6 +23,7 @@ interface MessageListProps {
   isLoading: boolean;
   streamingContent: string;
   streamingSearchQueries?: SearchQuery[];
+  provider?: Provider;
 }
 
 export function MessageList({
@@ -30,6 +31,7 @@ export function MessageList({
   isLoading,
   streamingContent,
   streamingSearchQueries = [],
+  provider = "claude",
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -39,11 +41,13 @@ export function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent, streamingSearchQueries]);
 
+  const providerName = provider === "gemini" ? "Gemini" : "Claude";
+
   if (messages.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <p className="text-lg font-medium">Claude와 대화를 시작하세요</p>
+          <p className="text-lg font-medium">{providerName}와 대화를 시작하세요</p>
           <p className="text-sm mt-1">아래 입력창에 메시지를 입력해주세요</p>
         </div>
       </div>
@@ -64,6 +68,7 @@ export function MessageList({
               message={message}
               isStreaming={showStreaming}
               streamingContent={showStreaming ? streamingContent : undefined}
+              provider={provider}
             />
           );
         })}

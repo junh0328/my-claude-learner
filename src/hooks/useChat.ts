@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Message, ClaudeModel, CLAUDE_MODELS, SearchQuery, Citation } from "@/types/chat";
+import {
+  Message,
+  AIModel,
+  Provider,
+  MODELS_BY_PROVIDER,
+  SearchQuery,
+  Citation,
+} from "@/types/chat";
 import { useStreamResponse } from "./useStreamResponse";
 
 interface UseChatOptions {
   apiKey?: string | null;
+  provider: Provider;
 }
 
 interface UseChatReturn {
@@ -15,8 +23,10 @@ interface UseChatReturn {
   streamingContent: string;
   streamingSearchQueries: SearchQuery[];
   streamingCitations: Citation[];
-  selectedModel: ClaudeModel;
-  setSelectedModel: (model: ClaudeModel) => void;
+  selectedModel: AIModel;
+  setSelectedModel: (model: AIModel) => void;
+  provider: Provider;
+  setProvider: (provider: Provider) => void;
   webSearchEnabled: boolean;
   setWebSearchEnabled: (enabled: boolean) => void;
   sendMessage: (content: string) => Promise<boolean>;
@@ -29,11 +39,12 @@ function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const { apiKey } = options;
+export function useChat(options: UseChatOptions): UseChatReturn {
+  const { apiKey, provider: initialProvider } = options;
   const [messages, setMessages] = useState<Message[]>([]);
-  const [selectedModel, setSelectedModel] = useState<ClaudeModel>(
-    CLAUDE_MODELS[0].id
+  const [provider, setProvider] = useState<Provider>(initialProvider);
+  const [selectedModel, setSelectedModel] = useState<AIModel>(
+    MODELS_BY_PROVIDER[initialProvider][0].id
   );
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
@@ -48,6 +59,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     resetStream,
     clearError,
   } = useStreamResponse();
+
+  // Provider 변경 시 해당 provider의 첫 번째 모델로 자동 선택
+  const handleSetProvider = useCallback((newProvider: Provider) => {
+    setProvider(newProvider);
+    const firstModel = MODELS_BY_PROVIDER[newProvider][0];
+    if (firstModel) {
+      setSelectedModel(firstModel.id);
+    }
+  }, []);
 
   const sendMessage = useCallback(
     async (content: string): Promise<boolean> => {
@@ -74,6 +94,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         const result = await startStream({
           messages: apiMessages,
           model: selectedModel,
+          provider,
           webSearchEnabled,
           apiKey: apiKey || undefined,
         });
@@ -90,8 +111,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           role: "assistant",
           content: result.text,
           createdAt: new Date(),
-          searchQueries: result.searchQueries.length > 0 ? result.searchQueries : undefined,
-          citations: result.citations.length > 0 ? result.citations : undefined,
+          searchQueries:
+            result.searchQueries.length > 0 ? result.searchQueries : undefined,
+          citations:
+            result.citations.length > 0 ? result.citations : undefined,
         };
 
         setMessages((prev) => [...prev, assistantMessage]);
@@ -101,7 +124,16 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         return false;
       }
     },
-    [messages, selectedModel, webSearchEnabled, isStreaming, startStream, resetStream, apiKey]
+    [
+      messages,
+      selectedModel,
+      provider,
+      webSearchEnabled,
+      isStreaming,
+      startStream,
+      resetStream,
+      apiKey,
+    ]
   );
 
   const stopGeneration = useCallback(() => {
@@ -122,6 +154,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     streamingCitations: citations,
     selectedModel,
     setSelectedModel,
+    provider,
+    setProvider: handleSetProvider,
     webSearchEnabled,
     setWebSearchEnabled,
     sendMessage,

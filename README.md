@@ -10,6 +10,30 @@ LLM 응답은 수 초에서 수십 초까지 걸릴 수 있습니다. 사용자�
 
 ![Claude 챗봇 메인 화면](./assets/screenshots/my-claude.gif)
 
+## 실행 방법
+
+```md
+# 다운로드
+
+pnpm install
+
+# 테스트 코드 실행
+
+pnpm test
+
+# 개발 환경 실행
+
+pnpm dev
+
+# 빌드
+
+pnpm build
+
+# 빌드 후 실행
+
+pnpm start
+```
+
 ### 이 글의 대상
 
 - LLM API를 활용한 서비스 개발에 관심 있는 개발자
@@ -929,4 +953,3 @@ export function MessageBubble({ message, searchQueries, citations }) {
 - [Next.js Route Handlers](https://nextjs.org/docs/app/building-your-application/routing/route-handlers)
 
 ---
-

@@ -1,48 +1,121 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback, useSyncExternalStore } from "react";
+import { Provider } from "@/types/chat";
 
-const API_KEY_STORAGE_KEY = "anthropic_api_key";
+const API_KEYS_STORAGE_KEY = "ai_api_keys";
+
+interface ApiKeys {
+  claude: string | null;
+  gemini: string | null;
+}
 
 interface UseApiKeyReturn {
-  apiKey: string | null;
-  needsApiKey: boolean;
+  apiKeys: ApiKeys;
+  selectedProvider: Provider;
+  setSelectedProvider: (provider: Provider) => void;
+  currentApiKey: string | null;
+  needsApiKey: (provider: Provider) => boolean;
   isLoading: boolean;
-  setApiKey: (key: string) => void;
-  clearApiKey: () => void;
+  setApiKey: (provider: Provider, key: string) => void;
+  clearApiKey: (provider: Provider) => void;
+  hasApiKey: (provider: Provider) => boolean;
+}
+
+// localStorage에서 API 키 가져오기
+function getStoredApiKeys(): ApiKeys {
+  if (typeof window === "undefined") {
+    return { claude: null, gemini: null };
+  }
+  const storedKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
+  if (storedKeys) {
+    try {
+      const parsed = JSON.parse(storedKeys);
+      return {
+        claude: parsed.claude || null,
+        gemini: parsed.gemini || null,
+      };
+    } catch {
+      return { claude: null, gemini: null };
+    }
+  }
+  return { claude: null, gemini: null };
+}
+
+// localStorage 상태를 구독하기 위한 함수들
+function subscribe(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getSnapshot(): string {
+  return localStorage.getItem(API_KEYS_STORAGE_KEY) || "{}";
+}
+
+function getServerSnapshot(): string {
+  return "{}";
 }
 
 export function useApiKey(): UseApiKeyReturn {
-  const [apiKey, setApiKeyState] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // useSyncExternalStore를 사용하여 localStorage 동기화
+  const storedKeysString = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
 
-  // 마운트 시 localStorage에서 API 키 확인
-  useEffect(() => {
-    const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (storedKey) {
-      setApiKeyState(storedKey);
+  const apiKeys: ApiKeys = (() => {
+    try {
+      const parsed = JSON.parse(storedKeysString);
+      return {
+        claude: parsed.claude || null,
+        gemini: parsed.gemini || null,
+      };
+    } catch {
+      return { claude: null, gemini: null };
     }
-    setIsLoading(false);
+  })();
+
+  const [selectedProvider, setSelectedProvider] = useState<Provider>("claude");
+  const [isLoading] = useState(false);
+
+  const setApiKey = useCallback((provider: Provider, key: string) => {
+    const current = getStoredApiKeys();
+    const newKeys = { ...current, [provider]: key };
+    localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(newKeys));
+    // storage 이벤트 트리거 (같은 탭에서는 자동으로 발생하지 않음)
+    window.dispatchEvent(new Event("storage"));
   }, []);
 
-  const setApiKey = useCallback((key: string) => {
-    localStorage.setItem(API_KEY_STORAGE_KEY, key);
-    setApiKeyState(key);
+  const clearApiKey = useCallback((provider: Provider) => {
+    const current = getStoredApiKeys();
+    const newKeys = { ...current, [provider]: null };
+    localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(newKeys));
+    window.dispatchEvent(new Event("storage"));
   }, []);
 
-  const clearApiKey = useCallback(() => {
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
-    setApiKeyState(null);
-  }, []);
+  const hasApiKey = useCallback(
+    (provider: Provider) => !!apiKeys[provider],
+    [apiKeys]
+  );
 
-  // API 키가 필요한지 여부 (로딩 완료 후 키가 없으면 필요)
-  const needsApiKey = !isLoading && !apiKey;
+  const needsApiKey = useCallback(
+    (provider: Provider) => !apiKeys[provider],
+    [apiKeys]
+  );
+
+  // 현재 선택된 provider의 API 키
+  const currentApiKey = apiKeys[selectedProvider];
 
   return {
-    apiKey,
+    apiKeys,
+    selectedProvider,
+    setSelectedProvider,
+    currentApiKey,
     needsApiKey,
     isLoading,
     setApiKey,
     clearApiKey,
+    hasApiKey,
   };
 }
