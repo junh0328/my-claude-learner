@@ -6,6 +6,7 @@ import {
   SearchQuery,
   Citation,
   WebSearchResult,
+  Provider,
 } from "@/types/chat";
 
 interface StreamResult {
@@ -25,6 +26,21 @@ interface UseStreamResponseReturn {
   abortStream: () => void;
   resetStream: () => void;
   clearError: () => void;
+}
+
+// Gemini 검색 결과 타입
+interface GeminiGroundingChunk {
+  web?: {
+    uri: string;
+    title: string;
+  };
+}
+
+interface GeminiGroundingSupport {
+  segment?: {
+    text?: string;
+  };
+  groundingChunkIndices?: number[];
 }
 
 export function useStreamResponse(): UseStreamResponseReturn {
@@ -53,9 +69,216 @@ export function useStreamResponse(): UseStreamResponseReturn {
     }
   }, []);
 
+  // Claude 스트림 파싱
+  const parseClaudeStream = useCallback(
+    async (
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      decoder: TextDecoder,
+      onText: (text: string) => void,
+      onSearchQuery: (query: SearchQuery) => void,
+      onCitation: (citation: Citation) => void
+    ): Promise<{ fullText: string; queries: SearchQuery[]; allCitations: Citation[] }> => {
+      let buffer = "";
+      let fullText = "";
+      const queries: SearchQuery[] = [];
+      const allCitations: Citation[] = [];
+
+      let currentSearchQuery: string | null = null;
+      let currentSearchId: string | null = null;
+      let partialJsonBuffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") continue;
+
+            try {
+              const event = JSON.parse(data);
+
+              if (event.type === "content_block_start") {
+                const block = event.content_block;
+
+                if (block?.type === "server_tool_use" && block?.name === "web_search") {
+                  currentSearchId = block.id;
+                }
+
+                if (block?.type === "web_search_tool_result" && block?.content) {
+                  const results: WebSearchResult[] = block.content
+                    .filter((r: { type: string }) => r.type === "web_search_result")
+                    .map((r: WebSearchResult) => ({
+                      url: r.url,
+                      title: r.title,
+                      page_age: r.page_age,
+                    }));
+
+                  if (currentSearchQuery && results.length > 0) {
+                    const query: SearchQuery = {
+                      query: currentSearchQuery,
+                      results,
+                    };
+                    queries.push(query);
+                    onSearchQuery(query);
+                  }
+                  currentSearchQuery = null;
+                  currentSearchId = null;
+                }
+              }
+
+              if (event.type === "content_block_delta") {
+                if (event.delta?.type === "text_delta" && event.delta?.text) {
+                  fullText += event.delta.text;
+                  onText(fullText);
+
+                  if (event.delta.citations) {
+                    for (const citation of event.delta.citations) {
+                      if (citation.type === "web_search_result_location") {
+                        allCitations.push(citation);
+                        onCitation(citation);
+                      }
+                    }
+                  }
+                }
+
+                if (event.delta?.type === "input_json_delta" && currentSearchId) {
+                  partialJsonBuffer += event.delta.partial_json || "";
+                  try {
+                    const input = JSON.parse(partialJsonBuffer);
+                    if (input.query) {
+                      currentSearchQuery = input.query;
+                    }
+                  } catch {
+                    // 아직 불완전한 JSON
+                  }
+                }
+              }
+
+              if (event.type === "content_block_stop") {
+                partialJsonBuffer = "";
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      return { fullText, queries, allCitations };
+    },
+    []
+  );
+
+  // Gemini 스트림 파싱
+  const parseGeminiStream = useCallback(
+    async (
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      decoder: TextDecoder,
+      onText: (text: string) => void,
+      onSearchQuery: (query: SearchQuery) => void,
+      onCitation: (citation: Citation) => void
+    ): Promise<{ fullText: string; queries: SearchQuery[]; allCitations: Citation[] }> => {
+      let buffer = "";
+      let fullText = "";
+      const queries: SearchQuery[] = [];
+      const allCitations: Citation[] = [];
+      const processedChunkUrls = new Set<string>();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (!data) continue;
+
+            try {
+              const event = JSON.parse(data);
+
+              // 텍스트 추출
+              const parts = event.candidates?.[0]?.content?.parts;
+              if (parts) {
+                for (const part of parts) {
+                  if (part.text) {
+                    fullText += part.text;
+                    onText(fullText);
+                  }
+                }
+              }
+
+              // Grounding metadata 처리
+              const groundingMetadata = event.candidates?.[0]?.groundingMetadata;
+              if (groundingMetadata) {
+                const chunks: GeminiGroundingChunk[] = groundingMetadata.groundingChunks || [];
+                const supports: GeminiGroundingSupport[] = groundingMetadata.groundingSupports || [];
+
+                // 검색 결과 추출
+                if (chunks.length > 0) {
+                  const newResults: WebSearchResult[] = [];
+                  for (const chunk of chunks) {
+                    if (chunk.web && !processedChunkUrls.has(chunk.web.uri)) {
+                      processedChunkUrls.add(chunk.web.uri);
+                      newResults.push({
+                        url: chunk.web.uri,
+                        title: chunk.web.title,
+                      });
+                    }
+                  }
+
+                  if (newResults.length > 0) {
+                    const query: SearchQuery = {
+                      query: "Google Search",
+                      results: newResults,
+                    };
+                    queries.push(query);
+                    onSearchQuery(query);
+                  }
+                }
+
+                // Citation 추출
+                for (const support of supports) {
+                  if (support.segment?.text && support.groundingChunkIndices) {
+                    for (const idx of support.groundingChunkIndices) {
+                      const chunk = chunks[idx];
+                      if (chunk?.web) {
+                        const citation: Citation = {
+                          type: "web_search_result_location",
+                          url: chunk.web.uri,
+                          title: chunk.web.title,
+                          cited_text: support.segment.text,
+                        };
+                        allCitations.push(citation);
+                        onCitation(citation);
+                      }
+                    }
+                  }
+                }
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      return { fullText, queries, allCitations };
+    },
+    []
+  );
+
   const startStream = useCallback(
     async (request: ChatRequest): Promise<StreamResult> => {
-      // 이전 스트림 중단
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -67,14 +290,10 @@ export function useStreamResponse(): UseStreamResponseReturn {
       setSearchQueries([]);
       setCitations([]);
 
+      const provider: Provider = request.provider;
       let fullText = "";
-      const queries: SearchQuery[] = [];
-      const allCitations: Citation[] = [];
-
-      // 현재 검색 쿼리 추적
-      let currentSearchQuery: string | null = null;
-      let currentSearchId: string | null = null;
-      let partialJsonBuffer = ""; // partial JSON 누적 버퍼
+      let queries: SearchQuery[] = [];
+      let allCitations: Citation[] = [];
 
       try {
         const response = await fetch("/api/chat", {
@@ -88,7 +307,6 @@ export function useStreamResponse(): UseStreamResponseReturn {
 
         if (!response.ok) {
           const errorData = await response.json();
-          // 구조화된 에러 응답을 JSON 문자열로 전달
           throw new Error(JSON.stringify(errorData));
         }
 
@@ -98,104 +316,34 @@ export function useStreamResponse(): UseStreamResponseReturn {
         }
 
         const decoder = new TextDecoder();
-        let buffer = "";
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6).trim();
-              if (data === "[DONE]") continue;
-
-              try {
-                const event = JSON.parse(data);
-
-                // content_block_start: 검색 쿼리 또는 검색 결과 시작
-                if (event.type === "content_block_start") {
-                  const block = event.content_block;
-
-                  // server_tool_use: 검색 쿼리
-                  if (block?.type === "server_tool_use" && block?.name === "web_search") {
-                    currentSearchId = block.id;
-                  }
-
-                  // web_search_tool_result: 검색 결과
-                  if (block?.type === "web_search_tool_result" && block?.content) {
-                    const results: WebSearchResult[] = block.content
-                      .filter((r: { type: string }) => r.type === "web_search_result")
-                      .map((r: WebSearchResult) => ({
-                        url: r.url,
-                        title: r.title,
-                        page_age: r.page_age,
-                      }));
-
-                    if (currentSearchQuery && results.length > 0) {
-                      const query: SearchQuery = {
-                        query: currentSearchQuery,
-                        results,
-                      };
-                      queries.push(query);
-                      setSearchQueries([...queries]);
-                    }
-                    currentSearchQuery = null;
-                    currentSearchId = null;
-                  }
-                }
-
-                // content_block_delta: 텍스트 또는 검색 쿼리 입력
-                if (event.type === "content_block_delta") {
-                  // 텍스트 델타
-                  if (event.delta?.type === "text_delta" && event.delta?.text) {
-                    fullText += event.delta.text;
-                    setStreamText(fullText);
-
-                    // citations 추출
-                    if (event.delta.citations) {
-                      for (const citation of event.delta.citations) {
-                        if (citation.type === "web_search_result_location") {
-                          allCitations.push(citation);
-                          setCitations([...allCitations]);
-                        }
-                      }
-                    }
-                  }
-
-                  // 검색 쿼리 입력 (input_json_delta)
-                  if (event.delta?.type === "input_json_delta" && currentSearchId) {
-                    partialJsonBuffer += event.delta.partial_json || "";
-                    // 완전한 JSON인지 확인 후 파싱 시도
-                    try {
-                      const input = JSON.parse(partialJsonBuffer);
-                      if (input.query) {
-                        currentSearchQuery = input.query;
-                      }
-                    } catch {
-                      // 아직 불완전한 JSON - 계속 누적
-                    }
-                  }
-                }
-
-                // content_block_stop: 블록 종료 시 버퍼 리셋
-                if (event.type === "content_block_stop") {
-                  partialJsonBuffer = "";
-                }
-              } catch {
-                // Skip invalid JSON
-              }
-            }
-          }
+        // Provider별 파싱
+        if (provider === "claude") {
+          const result = await parseClaudeStream(
+            reader,
+            decoder,
+            (text) => setStreamText(text),
+            (query) => setSearchQueries((prev) => [...prev, query]),
+            () => setCitations((prev) => [...prev])
+          );
+          fullText = result.fullText;
+          queries = result.queries;
+          allCitations = result.allCitations;
+        } else if (provider === "gemini") {
+          const result = await parseGeminiStream(
+            reader,
+            decoder,
+            (text) => setStreamText(text),
+            (query) => setSearchQueries((prev) => [...prev, query]),
+            () => setCitations((prev) => [...prev])
+          );
+          fullText = result.fullText;
+          queries = result.queries;
+          allCitations = result.allCitations;
         }
 
         return { text: fullText, searchQueries: queries, citations: allCitations };
       } catch (err) {
-        // Abort 에러는 정상 종료로 처리
         if (err instanceof Error && err.name === "AbortError") {
           return { text: fullText, searchQueries: queries, citations: allCitations, aborted: true };
         }
@@ -207,7 +355,7 @@ export function useStreamResponse(): UseStreamResponseReturn {
         abortControllerRef.current = null;
       }
     },
-    []
+    [parseClaudeStream, parseGeminiStream]
   );
 
   return {

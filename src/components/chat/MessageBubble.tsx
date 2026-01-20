@@ -1,6 +1,6 @@
 "use client";
 
-import { Message } from "@/types/chat";
+import { Message, Provider } from "@/types/chat";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { SearchResults } from "./SearchResults";
 import { LoadingDots } from "@/components/ui/loading-dots";
@@ -10,12 +10,14 @@ interface MessageBubbleProps {
   message: Message;
   isStreaming?: boolean;
   streamingContent?: string;
+  provider?: Provider;
 }
 
 export function MessageBubble({
   message,
   isStreaming,
   streamingContent,
+  provider = "claude",
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const displayContent =
@@ -23,11 +25,16 @@ export function MessageBubble({
       ? streamingContent || ""
       : message.content;
 
+  // Provider별 사용자 버블 색상
+  const userBubbleColor = provider === "gemini"
+    ? "bg-provider-gemini"
+    : "bg-provider-claude";
+
   // 사용자 메시지
   if (isUser) {
     return (
       <div className="flex w-full justify-end">
-        <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-bubble-user text-bubble-user-foreground">
+        <div className={cn("max-w-[85%] rounded-2xl px-4 py-3 text-white", userBubbleColor)}>
           <p className="whitespace-pre-wrap break-words">{displayContent}</p>
         </div>
       </div>

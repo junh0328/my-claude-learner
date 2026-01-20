@@ -1,14 +1,25 @@
 export type Role = "user" | "assistant";
 
+// Provider 타입
+export type Provider = "claude" | "gemini";
+
+// Claude 모델 타입
 export type ClaudeModel =
   | "claude-sonnet-4-20250514"
   | "claude-opus-4-20250514"
   | "claude-3-5-haiku-20241022";
 
+// Gemini 모델 타입
+export type GeminiModel = "gemini-2.5-flash" | "gemini-2.0-flash";
+
+// 통합 AI 모델 타입
+export type AIModel = ClaudeModel | GeminiModel;
+
 export interface ModelOption {
-  id: ClaudeModel;
+  id: AIModel;
   name: string;
   description: string;
+  provider: Provider;
 }
 
 export const CLAUDE_MODELS: ModelOption[] = [
@@ -16,22 +27,50 @@ export const CLAUDE_MODELS: ModelOption[] = [
     id: "claude-sonnet-4-20250514",
     name: "Claude Sonnet 4",
     description: "균형 잡힌 성능",
+    provider: "claude",
   },
   {
     id: "claude-opus-4-20250514",
     name: "Claude Opus 4",
     description: "최고 성능",
+    provider: "claude",
   },
   {
     id: "claude-3-5-haiku-20241022",
     name: "Claude 3.5 Haiku",
     description: "최고 속도",
+    provider: "claude",
   },
 ];
 
+export const GEMINI_MODELS: ModelOption[] = [
+  {
+    id: "gemini-2.5-flash",
+    name: "Gemini 2.5 Flash",
+    description: "빠른 응답",
+    provider: "gemini",
+  },
+  {
+    id: "gemini-2.0-flash",
+    name: "Gemini 2.0 Flash",
+    description: "안정적 성능",
+    provider: "gemini",
+  },
+];
+
+// Provider별 모델 목록
+export const MODELS_BY_PROVIDER: Record<Provider, ModelOption[]> = {
+  claude: CLAUDE_MODELS,
+  gemini: GEMINI_MODELS,
+};
+
+// 전체 모델 목록
+export const ALL_MODELS: ModelOption[] = [...CLAUDE_MODELS, ...GEMINI_MODELS];
+
 export interface ChatRequest {
   messages: Pick<Message, "role" | "content">[];
-  model: ClaudeModel;
+  model: AIModel;
+  provider: Provider;
   webSearchEnabled?: boolean;
   apiKey?: string;
 }
