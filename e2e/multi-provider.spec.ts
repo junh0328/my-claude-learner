@@ -150,9 +150,9 @@ test.describe("Multi-Provider UI", () => {
     const geminiButton = providerGroup.locator("button", { hasText: "Gemini" });
     await geminiButton.click();
 
-    // Gemini 모델 확인
+    // Gemini 모델 확인 (첫 번째 모델인 Gemini 2.5 Pro Exp)
     await modelSelect.click();
-    await expect(page.locator('[role="option"]', { hasText: "Gemini 2.5 Flash" })).toBeVisible();
+    await expect(page.locator('[role="option"]', { hasText: "Gemini 2.5 Pro (Exp)" })).toBeVisible();
   });
 });
 
