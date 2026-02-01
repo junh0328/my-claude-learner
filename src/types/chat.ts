@@ -10,7 +10,10 @@ export type ClaudeModel =
   | "claude-3-5-haiku-20241022";
 
 // Gemini 모델 타입
-export type GeminiModel = "gemini-2.5-flash" | "gemini-2.0-flash";
+export type GeminiModel =
+  | "gemini-2.5-pro-exp-03-25"
+  | "gemini-2.5-flash"
+  | "gemini-2.5-flash-lite-preview";
 
 // 통합 AI 모델 타입
 export type AIModel = ClaudeModel | GeminiModel;
@@ -45,15 +48,21 @@ export const CLAUDE_MODELS: ModelOption[] = [
 
 export const GEMINI_MODELS: ModelOption[] = [
   {
+    id: "gemini-2.5-pro-exp-03-25",
+    name: "Gemini 2.5 Pro (Exp)",
+    description: "최고 성능 (무료 실험용)",
+    provider: "gemini",
+  },
+  {
     id: "gemini-2.5-flash",
     name: "Gemini 2.5 Flash",
     description: "빠른 응답",
     provider: "gemini",
   },
   {
-    id: "gemini-2.0-flash",
-    name: "Gemini 2.0 Flash",
-    description: "안정적 성능",
+    id: "gemini-2.5-flash-lite-preview",
+    name: "Gemini 2.5 Flash Lite",
+    description: "저지연 최적화",
     provider: "gemini",
   },
 ];
