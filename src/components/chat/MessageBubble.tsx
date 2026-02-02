@@ -26,9 +26,12 @@ export function MessageBubble({
       : message.content;
 
   // Provider별 사용자 버블 색상
-  const userBubbleColor = provider === "gemini"
-    ? "bg-provider-gemini"
-    : "bg-provider-claude";
+  const userBubbleColorMap: Record<Provider, string> = {
+    claude: "bg-provider-claude",
+    gemini: "bg-provider-gemini",
+    groq: "bg-provider-groq",
+  };
+  const userBubbleColor = userBubbleColorMap[provider];
 
   // 사용자 메시지
   if (isUser) {

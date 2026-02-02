@@ -196,6 +196,86 @@
   - [x] API Key 다이얼로그 탭 테스트
 - **테스트 결과**: 10/10 통과 ✅
 
+### Phase 13: Gemini 기본 Provider + 429 폴백 ✅
+
+- [x] 13.1 타입 정의 확장 (chat.ts)
+  - [x] FallbackInfo 타입 추가
+  - [x] ChatRequest에 fallbackApiKey, allowFallback 필드 추가
+- [x] 13.2 기본 Provider 변경 (useApiKey.ts)
+  - [x] selectedProvider 기본값 "claude" → "gemini"
+- [x] 13.3 InfoBanner 컴포넌트 생성
+  - [x] 파란색 정보 알림 배너
+  - [x] 닫기 버튼 지원
+- [x] 13.4 폴백 로직 구현 (useStreamResponse.ts)
+  - [x] 429 에러 감지 로직
+  - [x] Gemini → Claude 자동 폴백
+  - [x] fallbackInfo 반환값 추가
+  - [x] 무한 루프 방지 (1회만 시도)
+- [x] 13.5 useChat 훅 확장
+  - [x] fallbackApiKey 옵션 추가
+  - [x] fallbackInfo, clearFallbackInfo 상태 관리
+  - [x] allowFallback 조건 처리
+- [x] 13.6 ChatContainer 통합
+  - [x] apiKeys에서 Claude 키 폴백용 전달
+  - [x] InfoBanner 렌더링
+  - [x] 폴백 알림 메시지 표시
+- [x] 13.7 E2E 테스트 수정 및 추가
+  - [x] 기본 Provider 테스트 수정 (Gemini)
+  - [x] Gemini 429 → Claude 폴백 테스트
+  - [x] Claude 키 없을 때 에러 표시 테스트
+  - [x] InfoBanner 닫기 테스트
+- **테스트 결과**: 32/32 통과 ✅
+
+### Phase 14: Groq Provider 추가 + 체인 폴백 ✅
+
+- [x] 14.1 타입 정의 확장 (chat.ts)
+  - [x] Provider 타입 확장 ("claude" | "gemini" | "groq")
+  - [x] GroqModel 타입 추가 (llama-3.3-70b-versatile, llama-3.1-8b-instant)
+  - [x] AIModel 통합 타입 확장
+  - [x] GROQ_MODELS 상수 배열
+  - [x] FALLBACK_CHAIN 상수 (["gemini", "groq", "claude"])
+  - [x] MODELS_BY_PROVIDER에 groq 추가
+  - [x] ChatRequest에 fallbackApiKeys 필드 추가 (Partial<Record<Provider, string>>)
+- [x] 14.2 globals.css 확장
+  - [x] --provider-groq 테마 색상 추가 (Green - 속도 상징)
+  - [x] --color-provider-groq Tailwind 변수 매핑
+- [x] 14.3 API 키 관리 확장 (useApiKey.ts)
+  - [x] ApiKeys 인터페이스에 groq 추가
+  - [x] getStoredApiKeys에서 groq 파싱
+  - [x] getFallbackApiKeys 함수 추가
+- [x] 14.4 API Route 분기 (route.ts)
+  - [x] GROQ_API_URL 상수 추가
+  - [x] handleGroqRequest 함수 구현 (OpenAI 호환 형식)
+  - [x] validateApiKey에 groq 검증 추가 (gsk\_ 접두사)
+  - [x] providerNames 매핑 객체 사용
+- [x] 14.5 스트리밍 파서 확장 (useStreamResponse.ts)
+  - [x] parseGroqStream 함수 구현 (OpenAI SSE 형식)
+  - [x] 체인 폴백 로직 구현 (FALLBACK_CHAIN 순서 적용)
+  - [x] attemptedProviders 배열로 중복 시도 방지
+  - [x] Groq 선택 시 webSearchEnabled 자동 비활성화
+- [x] 14.6 useChat 훅 수정
+  - [x] fallbackApiKeys 옵션으로 변경
+  - [x] hasFallbackKeys 조건 처리
+  - [x] Groq 선택 시 webSearchEnabled 강제 false
+- [x] 14.7 UI 컴포넌트 수정
+  - [x] ChatInput: Groq 버튼 추가, GroqIcon (번개) SVG
+  - [x] ChatInput: Groq 선택 시 웹 검색 토글 비활성화 + "(미지원)" 표시
+  - [x] ApiKeyDialog: Groq 탭 추가, gsk\_ 형식 검증, console.groq.com 링크
+  - [x] ChatHeader: Groq 아이콘/제목 표시, providerConfig 객체 사용
+  - [x] ChatContainer: getFallbackApiKeys 호출, InfoBanner Groq 메시지 추가
+- [x] 14.8 E2E 테스트 확장 (e2e/multi-provider.spec.ts)
+  - [x] createGroqSSEData 유틸리티 함수
+  - [x] setApiKeys에 groq 지원
+  - [x] Groq 버튼 표시 테스트
+  - [x] Groq 전환 UI 테스트
+  - [x] Groq 웹 검색 비활성화 테스트
+  - [x] Groq 모델 목록 테스트
+  - [x] Groq 스트리밍 테스트
+  - [x] Gemini 429 → Groq 폴백 테스트
+  - [x] Gemini 429 → Groq 429 → Claude 체인 폴백 테스트
+  - [x] API Key 다이얼로그 Groq 탭 테스트
+- **테스트 결과**: 36/36 통과 ✅
+
 ---
 
 ## 파일 구조
@@ -205,7 +285,7 @@ src/
 ├── app/
 │   ├── api/
 │   │   └── chat/
-│   │       └── route.ts          # Multi-Provider API 프록시 (Claude + Gemini)
+│   │       └── route.ts          # Multi-Provider API 프록시 (Claude + Gemini + Groq)
 │   ├── globals.css               # 공통 색상 변수 + Provider 테마
 │   ├── layout.tsx
 │   └── page.tsx                  # ChatContainer
@@ -218,8 +298,9 @@ src/
 │   │   ├── ChatInput.tsx         # Provider 선택 + 모델 선택 + 웹 검색 토글
 │   │   ├── SearchResults.tsx     # 검색 쿼리 결과 UI
 │   │   ├── ErrorBanner.tsx       # 에러 표시 UI
+│   │   ├── InfoBanner.tsx        # 폴백 알림 배너
 │   │   ├── CodeBlock.tsx         # 구문 강조 + 복사 버튼
-│   │   ├── ApiKeyDialog.tsx      # API 키 입력 모달 (탭 UI)
+│   │   ├── ApiKeyDialog.tsx      # API 키 입력 모달 (3-탭 UI: Claude/Gemini/Groq)
 │   │   └── MarkdownRenderer.tsx
 │   └── ui/
 │       ├── button.tsx            # shadcn
@@ -232,11 +313,11 @@ src/
 │       ├── tabs.tsx              # shadcn (Provider 탭)
 │       └── loading-dots.tsx
 ├── hooks/
-│   ├── useStreamResponse.ts      # Provider별 스트림 파싱 (Claude/Gemini)
-│   ├── useChat.ts                # Provider 상태 + 정지/에러 관리
-│   └── useApiKey.ts              # Provider별 API 키 관리 (useSyncExternalStore)
+│   ├── useStreamResponse.ts      # Provider별 스트림 파싱 + 체인 폴백 로직
+│   ├── useChat.ts                # Provider 상태 + 폴백 정보 관리
+│   └── useApiKey.ts              # Provider별 API 키 관리 (기본: Gemini)
 ├── types/
-│   └── chat.ts                   # Provider, AIModel, Gemini 타입 포함
+│   └── chat.ts                   # Provider, AIModel, FALLBACK_CHAIN 타입 포함
 └── lib/
     └── utils.ts                  # shadcn cn 유틸
 
@@ -307,11 +388,18 @@ pnpm run dev
 
 ### Gemini (Google)
 
-| 모델                     | 설명                    |
-| ------------------------ | ----------------------- |
-| Gemini 2.5 Pro (Exp)     | 최고 성능 (무료 실험용) |
-| Gemini 2.5 Flash         | 빠른 응답               |
-| Gemini 2.5 Flash Lite    | 저지연 최적화           |
+| 모델                  | 설명                    |
+| --------------------- | ----------------------- |
+| Gemini 2.5 Pro (Exp)  | 최고 성능 (무료 실험용) |
+| Gemini 2.5 Flash      | 빠른 응답               |
+| Gemini 2.5 Flash Lite | 저지연 최적화           |
+
+### Groq
+
+| 모델          | 설명          |
+| ------------- | ------------- |
+| Llama 3.3 70B | 다목적 (128K) |
+| Llama 3.1 8B  | 빠른 응답     |
 
 ---
 
@@ -331,6 +419,8 @@ pnpm run dev
 | Phase 10 | ✅ 완료 | 2026-01-20 |
 | Phase 11 | ✅ 완료 | 2026-01-20 |
 | Phase 12 | ✅ 완료 | 2026-01-20 |
+| Phase 13 | ✅ 완료 | 2026-02-02 |
+| Phase 14 | ✅ 완료 | 2026-02-02 |
 
 ---
 
@@ -349,9 +439,12 @@ pnpm run dev
 - **코드 블록 구문 강조** (Prism + oneDark 테마)
 - **코드 복사 버튼** (언어 라벨, 복사됨 피드백)
 - **API 키 관리** (입력 모달, localStorage 저장, 설정 버튼)
-- **Multi-Provider 지원** (Claude + Gemini 전환)
+- **Multi-Provider 지원** (Claude + Gemini + Groq 전환)
 - **Provider별 테마** (색상, 아이콘 구분)
 - **Gemini 웹 검색** (Google Search Grounding)
+- **Gemini 기본 Provider** (앱 시작 시 Gemini 선택)
+- **체인 폴백 시스템** (Gemini → Groq → Claude 순차 폴백)
+- **Groq Provider** (Llama 3.3 70B, Llama 3.1 8B)
 
 ### 기술적 특징
 
@@ -367,6 +460,8 @@ pnpm run dev
 - **react-syntax-highlighter 구문 강조**
 - **Playwright E2E 테스트**
 - **useSyncExternalStore를 활용한 localStorage 동기화**
+- **체인 폴백 시스템** (Gemini → Groq → Claude 자동 전환)
+- **Groq OpenAI 호환 API** 스트림 파싱
 
 ### 향후 개선 가능 사항
 
@@ -378,6 +473,7 @@ pnpm run dev
 - 검색 결과 snippet 표시
 - cited_text hover 표시
 - 정지 시 부분 응답 저장 옵션
-- rate_limit_error 시 자동 재시도
+- ~~rate_limit_error 시 자동 재시도~~ (Phase 13에서 폴백으로 구현됨)
 - 라이트/다크 모드별 코드 테마 변경
 - 추가 Provider 지원 (OpenAI GPT 등)
+- ~~Groq Provider 추가~~ (Phase 14에서 구현됨)

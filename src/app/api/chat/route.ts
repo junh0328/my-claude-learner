@@ -3,6 +3,7 @@ import { ChatRequest, Provider } from "@/types/chat";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 // Claude API 호출
 async function handleClaudeRequest(
@@ -195,6 +196,87 @@ async function handleGeminiRequest(
   return createStreamResponse(response);
 }
 
+// Groq API 호출
+async function handleGroqRequest(
+  body: ChatRequest,
+  apiKey: string
+): Promise<Response> {
+  const { messages, model } = body;
+
+  const requestBody = {
+    model: model || "llama-3.3-70b-versatile",
+    messages: messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    })),
+    stream: true,
+    max_tokens: 4096,
+  };
+
+  const response = await fetch(GROQ_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Groq API error:", errorText);
+
+    let errorResponse: {
+      type: string;
+      message: string;
+      errorCode?: string;
+    } = {
+      type: "unknown_error",
+      message: "알 수 없는 오류가 발생했습니다.",
+    };
+
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed.error) {
+        const statusCode = response.status;
+        let userMessage = parsed.error.message || errorText;
+
+        switch (statusCode) {
+          case 429:
+            userMessage = "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+            break;
+          case 401:
+          case 403:
+            userMessage = "API 인증에 실패했습니다. API 키를 확인해주세요.";
+            break;
+          case 400:
+            userMessage = "잘못된 요청입니다. 메시지를 확인해주세요.";
+            break;
+          case 503:
+            userMessage = "서버가 과부하 상태입니다. 잠시 후 다시 시도해주세요.";
+            break;
+        }
+
+        errorResponse = {
+          type: statusCode === 429 ? "rate_limit_error" : `groq_error_${statusCode}`,
+          message: userMessage,
+          errorCode: parsed.error.code,
+        };
+      }
+    } catch {
+      // JSON 파싱 실패
+    }
+
+    return new Response(JSON.stringify(errorResponse), {
+      status: response.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Stream the response
+  return createStreamResponse(response);
+}
+
 // 공통 스트림 응답 생성
 function createStreamResponse(response: Response): Response {
   const stream = new ReadableStream({
@@ -238,6 +320,8 @@ function validateApiKey(provider: Provider, apiKey: string): boolean {
     return apiKey.startsWith("sk-ant-");
   } else if (provider === "gemini") {
     return apiKey.startsWith("AIzaSy");
+  } else if (provider === "groq") {
+    return apiKey.startsWith("gsk_");
   }
   return false;
 }
@@ -253,13 +337,21 @@ export async function POST(request: NextRequest) {
       apiKey = process.env.ANTHROPIC_API_KEY || clientApiKey;
     } else if (provider === "gemini") {
       apiKey = process.env.GEMINI_API_KEY || clientApiKey;
+    } else if (provider === "groq") {
+      apiKey = process.env.GROQ_API_KEY || clientApiKey;
     }
+
+    const providerNames: Record<Provider, string> = {
+      claude: "Anthropic",
+      gemini: "Gemini",
+      groq: "Groq",
+    };
 
     if (!apiKey) {
       return new Response(
         JSON.stringify({
           type: "missing_api_key",
-          message: `${provider === "claude" ? "Anthropic" : "Gemini"} API 키가 설정되지 않았습니다.`,
+          message: `${providerNames[provider]} API 키가 설정되지 않았습니다.`,
         }),
         { status: 401, headers: { "Content-Type": "application/json" } }
       );
@@ -270,7 +362,7 @@ export async function POST(request: NextRequest) {
       return new Response(
         JSON.stringify({
           type: "invalid_api_key",
-          message: `올바른 ${provider === "claude" ? "Anthropic" : "Gemini"} API 키 형식이 아닙니다.`,
+          message: `올바른 ${providerNames[provider]} API 키 형식이 아닙니다.`,
         }),
         { status: 401, headers: { "Content-Type": "application/json" } }
       );
@@ -288,6 +380,8 @@ export async function POST(request: NextRequest) {
       return handleClaudeRequest(body, apiKey);
     } else if (provider === "gemini") {
       return handleGeminiRequest(body, apiKey);
+    } else if (provider === "groq") {
+      return handleGroqRequest(body, apiKey);
     }
 
     return new Response(

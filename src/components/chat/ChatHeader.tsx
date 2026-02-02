@@ -38,17 +38,37 @@ function GeminiIcon({ className }: { className?: string }) {
   );
 }
 
+// Groq 아이콘 컴포넌트 (번개)
+function GroqIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+    >
+      <path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z" />
+    </svg>
+  );
+}
+
+const providerConfig: Record<Provider, { color: string; name: string }> = {
+  claude: { color: 'bg-provider-claude', name: 'Claude' },
+  gemini: { color: 'bg-provider-gemini', name: 'Gemini' },
+  groq: { color: 'bg-provider-groq', name: 'Groq' },
+};
+
 export function ChatHeader({ onClear, onOpenApiKeySettings, messageCount, selectedProvider }: ChatHeaderProps) {
-  const isGemini = selectedProvider === 'gemini';
-  const providerColor = isGemini ? 'bg-provider-gemini' : 'bg-provider-claude';
-  const providerName = isGemini ? 'Gemini' : 'Claude';
+  const { color: providerColor, name: providerName } = providerConfig[selectedProvider];
 
   return (
     <header className='flex items-center justify-between border-b border-border bg-background px-4 py-3'>
       <div className='flex items-center gap-3'>
         <div className={`flex size-10 items-center justify-center rounded-full ${providerColor}`}>
-          {isGemini ? (
+          {selectedProvider === 'gemini' ? (
             <GeminiIcon className="size-5 text-white" />
+          ) : selectedProvider === 'groq' ? (
+            <GroqIcon className="size-5 text-white" />
           ) : (
             <ClaudeIcon className="size-5 text-white" />
           )}

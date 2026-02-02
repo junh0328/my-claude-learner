@@ -8,6 +8,7 @@ const API_KEYS_STORAGE_KEY = "ai_api_keys";
 interface ApiKeys {
   claude: string | null;
   gemini: string | null;
+  groq: string | null;
 }
 
 interface UseApiKeyReturn {
@@ -20,12 +21,13 @@ interface UseApiKeyReturn {
   setApiKey: (provider: Provider, key: string) => void;
   clearApiKey: (provider: Provider) => void;
   hasApiKey: (provider: Provider) => boolean;
+  getFallbackApiKeys: () => Partial<Record<Provider, string>>;
 }
 
 // localStorage에서 API 키 가져오기
 function getStoredApiKeys(): ApiKeys {
   if (typeof window === "undefined") {
-    return { claude: null, gemini: null };
+    return { claude: null, gemini: null, groq: null };
   }
   const storedKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
   if (storedKeys) {
@@ -34,12 +36,13 @@ function getStoredApiKeys(): ApiKeys {
       return {
         claude: parsed.claude || null,
         gemini: parsed.gemini || null,
+        groq: parsed.groq || null,
       };
     } catch {
-      return { claude: null, gemini: null };
+      return { claude: null, gemini: null, groq: null };
     }
   }
-  return { claude: null, gemini: null };
+  return { claude: null, gemini: null, groq: null };
 }
 
 // localStorage 상태를 구독하기 위한 함수들
@@ -70,13 +73,14 @@ export function useApiKey(): UseApiKeyReturn {
       return {
         claude: parsed.claude || null,
         gemini: parsed.gemini || null,
+        groq: parsed.groq || null,
       };
     } catch {
-      return { claude: null, gemini: null };
+      return { claude: null, gemini: null, groq: null };
     }
   })();
 
-  const [selectedProvider, setSelectedProvider] = useState<Provider>("claude");
+  const [selectedProvider, setSelectedProvider] = useState<Provider>("gemini");
   const [isLoading] = useState(false);
 
   const setApiKey = useCallback((provider: Provider, key: string) => {
@@ -104,6 +108,15 @@ export function useApiKey(): UseApiKeyReturn {
     [apiKeys]
   );
 
+  // 폴백에 사용할 API 키들 반환 (FALLBACK_CHAIN 순서로)
+  const getFallbackApiKeys = useCallback(() => {
+    const keys: Partial<Record<Provider, string>> = {};
+    if (apiKeys.gemini) keys.gemini = apiKeys.gemini;
+    if (apiKeys.groq) keys.groq = apiKeys.groq;
+    if (apiKeys.claude) keys.claude = apiKeys.claude;
+    return keys;
+  }, [apiKeys]);
+
   // 현재 선택된 provider의 API 키
   const currentApiKey = apiKeys[selectedProvider];
 
@@ -117,5 +130,6 @@ export function useApiKey(): UseApiKeyReturn {
     setApiKey,
     clearApiKey,
     hasApiKey,
+    getFallbackApiKeys,
   };
 }

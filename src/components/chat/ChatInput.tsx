@@ -53,6 +53,20 @@ function ClaudeIcon({ className }: { className?: string }) {
   );
 }
 
+// Groq 아이콘 컴포넌트 (번개)
+function GroqIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+    >
+      <path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z" />
+    </svg>
+  );
+}
+
 export function ChatInput({
   onSend,
   onStop,
@@ -106,9 +120,12 @@ export function ChatInput({
     [onProviderChange, onModelChange]
   );
 
-  const providerColor = selectedProvider === "claude"
-    ? "bg-provider-claude"
-    : "bg-provider-gemini";
+  const providerColorMap: Record<Provider, string> = {
+    claude: "bg-provider-claude",
+    gemini: "bg-provider-gemini",
+    groq: "bg-provider-groq",
+  };
+  const providerColor = providerColorMap[selectedProvider];
 
   return (
     <div className="border-t border-border bg-background p-4">
@@ -144,6 +161,20 @@ export function ChatInput({
               }`} />
               Gemini
             </button>
+            <button
+              type="button"
+              onClick={() => handleProviderChange("groq")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
+                selectedProvider === "groq"
+                  ? "bg-provider-groq text-white"
+                  : "bg-muted/50 hover:bg-muted text-muted-foreground"
+              }`}
+            >
+              <GroqIcon className={`size-3.5 ${
+                selectedProvider === "groq" ? "text-white" : "text-provider-groq"
+              }`} />
+              Groq
+            </button>
           </div>
 
           {/* 모델 선택 */}
@@ -174,21 +205,28 @@ export function ChatInput({
           <div className="flex items-center gap-2">
             <Switch
               id="web-search"
-              checked={webSearchEnabled}
+              checked={webSearchEnabled && selectedProvider !== "groq"}
               onCheckedChange={onWebSearchChange}
+              disabled={selectedProvider === "groq"}
               className={
                 selectedProvider === "gemini"
                   ? "data-[state=checked]:bg-provider-gemini hover:data-[state=checked]:bg-provider-gemini/90"
+                  : selectedProvider === "groq"
+                  ? "opacity-50 cursor-not-allowed"
                   : "data-[state=checked]:bg-provider-claude hover:data-[state=checked]:bg-provider-claude/90"
               }
             />
             <label
               htmlFor="web-search"
               className={`text-sm cursor-pointer select-none ${
-                webSearchEnabled ? "text-foreground" : "text-muted-foreground"
+                selectedProvider === "groq"
+                  ? "text-muted-foreground/50"
+                  : webSearchEnabled
+                  ? "text-foreground"
+                  : "text-muted-foreground"
               }`}
             >
-              웹 검색
+              웹 검색{selectedProvider === "groq" && " (미지원)"}
             </label>
           </div>
         </div>

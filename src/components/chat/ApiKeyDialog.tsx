@@ -20,6 +20,7 @@ interface ApiKeyDialogProps {
   onDelete?: (provider: Provider) => void;
   hasClaudeKey: boolean;
   hasGeminiKey: boolean;
+  hasGroqKey: boolean;
 }
 
 // Gemini Sparkle SVG 컴포넌트
@@ -50,6 +51,20 @@ function ClaudeIcon({ className }: { className?: string }) {
   );
 }
 
+// Groq 아이콘 컴포넌트 (번개)
+function GroqIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+    >
+      <path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z" />
+    </svg>
+  );
+}
+
 export function ApiKeyDialog({
   open,
   onOpenChange,
@@ -57,11 +72,14 @@ export function ApiKeyDialog({
   onDelete,
   hasClaudeKey,
   hasGeminiKey,
+  hasGroqKey,
 }: ApiKeyDialogProps) {
   const [claudeKey, setClaudeKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
+  const [groqKey, setGroqKey] = useState("");
   const [claudeError, setClaudeError] = useState("");
   const [geminiError, setGeminiError] = useState("");
+  const [groqError, setGroqError] = useState("");
   const [activeTab, setActiveTab] = useState<Provider>("claude");
 
   const handleClaudeSubmit = (e: React.FormEvent) => {
@@ -102,7 +120,26 @@ export function ApiKeyDialog({
     setGeminiKey("");
   };
 
-  const hasAnyKey = hasClaudeKey || hasGeminiKey;
+  const handleGroqSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedKey = groqKey.trim();
+
+    if (!trimmedKey) {
+      setGroqError("API 키를 입력해주세요.");
+      return;
+    }
+
+    if (!trimmedKey.startsWith("gsk_")) {
+      setGroqError("올바른 Groq API 키 형식이 아닙니다. (gsk_...)");
+      return;
+    }
+
+    setGroqError("");
+    onSubmit("groq", trimmedKey);
+    setGroqKey("");
+  };
+
+  const hasAnyKey = hasClaudeKey || hasGeminiKey || hasGroqKey;
 
   return (
     <Dialog open={open} onOpenChange={hasAnyKey ? onOpenChange : undefined}>
@@ -115,16 +152,21 @@ export function ApiKeyDialog({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Provider)} className="mt-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="claude" className="gap-2">
-              <ClaudeIcon className="size-4 text-provider-claude" />
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="claude" className="gap-1.5 text-xs sm:text-sm">
+              <ClaudeIcon className="size-3.5 text-provider-claude" />
               Claude
-              {hasClaudeKey && <span className="ml-1 text-xs text-green-500">✓</span>}
+              {hasClaudeKey && <span className="text-xs text-green-500">✓</span>}
             </TabsTrigger>
-            <TabsTrigger value="gemini" className="gap-2">
-              <GeminiIcon className="size-4 text-provider-gemini" />
+            <TabsTrigger value="gemini" className="gap-1.5 text-xs sm:text-sm">
+              <GeminiIcon className="size-3.5 text-provider-gemini" />
               Gemini
-              {hasGeminiKey && <span className="ml-1 text-xs text-green-500">✓</span>}
+              {hasGeminiKey && <span className="text-xs text-green-500">✓</span>}
+            </TabsTrigger>
+            <TabsTrigger value="groq" className="gap-1.5 text-xs sm:text-sm">
+              <GroqIcon className="size-3.5 text-provider-groq" />
+              Groq
+              {hasGroqKey && <span className="text-xs text-green-500">✓</span>}
             </TabsTrigger>
           </TabsList>
 
@@ -218,6 +260,56 @@ export function ApiKeyDialog({
                     type="button"
                     variant="destructive"
                     onClick={() => onDelete("gemini")}
+                  >
+                    삭제
+                  </Button>
+                )}
+              </div>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="groq" className="space-y-4 mt-4">
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-provider-groq hover:underline font-medium"
+                >
+                  console.groq.com
+                </a>
+                에서 API 키를 발급받으세요.
+              </p>
+              <p className="text-xs">무료 요금제: 30 RPM, 6000 TPM</p>
+            </div>
+
+            <form onSubmit={handleGroqSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Input
+                  type="password"
+                  placeholder="gsk_..."
+                  value={groqKey}
+                  onChange={(e) => {
+                    setGroqKey(e.target.value);
+                    setGroqError("");
+                  }}
+                  className="font-mono text-sm"
+                />
+                {groqError && (
+                  <p className="text-sm text-destructive">{groqError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1 bg-provider-groq hover:bg-provider-groq/90">
+                  {hasGroqKey ? "키 변경" : "저장"}
+                </Button>
+                {hasGroqKey && onDelete && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => onDelete("groq")}
                   >
                     삭제
                   </Button>

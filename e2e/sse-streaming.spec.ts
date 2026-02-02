@@ -4,6 +4,20 @@ import { test, expect, Page } from "@playwright/test";
  * SSE 스트리밍 테스트를 위한 더미 데이터 생성 유틸리티
  */
 
+// localStorage에 API 키 설정
+async function setApiKeys(
+  page: Page,
+  keys: { claude?: string; gemini?: string }
+) {
+  await page.addInitScript((keysData) => {
+    const storedKeys = {
+      claude: keysData.claude || null,
+      gemini: keysData.gemini || null,
+    };
+    localStorage.setItem("ai_api_keys", JSON.stringify(storedKeys));
+  }, keys);
+}
+
 // SSE 이벤트 형식으로 데이터 생성
 function createSSEEvent(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
@@ -206,12 +220,24 @@ async function mockChatAPIError(page: Page, errorType: string) {
 
 // ==================== 테스트 케이스 ====================
 
+// 페이지 설정 헬퍼: Claude provider로 전환
+async function setupClaudeProvider(page: Page) {
+  // Claude로 전환 (기본 Provider가 Gemini이므로)
+  const providerGroup = page.locator(".flex.rounded-lg.border");
+  const claudeButton = providerGroup.locator("button", { hasText: "Claude" });
+  await claudeButton.click();
+  await page.waitForTimeout(100);
+}
+
 test.describe("SSE 스트리밍 테스트", () => {
   test("기본 텍스트 스트리밍이 정상 동작해야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     const responseText = "안녕하세요! 저는 Claude입니다. 무엇을 도와드릴까요?";
     await mockChatAPI(page, createTextStreamResponse(responseText));
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     // 메시지 입력 및 전송
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
@@ -225,9 +251,12 @@ test.describe("SSE 스트리밍 테스트", () => {
   });
 
   test("코드 블록이 구문 강조와 함께 렌더링되어야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     await mockChatAPI(page, createCodeBlockStreamResponse());
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
     await textarea.fill("코드 예제를 보여줘");
@@ -247,12 +276,15 @@ test.describe("SSE 스트리밍 테스트", () => {
     page,
     context,
   }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     // 클립보드 권한 부여
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 
     await mockChatAPI(page, createCodeBlockStreamResponse());
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
     await textarea.fill("코드 예제");
@@ -279,9 +311,12 @@ test.describe("SSE 스트리밍 테스트", () => {
   });
 
   test("사용자 메시지가 오른쪽에 표시되어야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     await mockChatAPI(page, createTextStreamResponse("응답입니다."));
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
     await textarea.fill("테스트 메시지");
@@ -297,9 +332,12 @@ test.describe("SSE 스트리밍 테스트", () => {
   });
 
   test("AI 응답이 왼쪽에 표시되어야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     await mockChatAPI(page, createTextStreamResponse("AI 응답입니다."));
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
     await textarea.fill("질문");
@@ -317,9 +355,12 @@ test.describe("SSE 스트리밍 테스트", () => {
 
 test.describe("에러 처리 테스트", () => {
   test("rate_limit_error 시 ErrorBanner가 표시되어야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     await mockChatAPIError(page, "rate_limit_error");
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
     await textarea.fill("테스트");
@@ -331,9 +372,12 @@ test.describe("에러 처리 테스트", () => {
   });
 
   test("에러 배너 닫기 버튼이 동작해야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     await mockChatAPIError(page, "rate_limit_error");
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
     await textarea.fill("테스트");
@@ -352,6 +396,7 @@ test.describe("에러 처리 테스트", () => {
 
 test.describe("스트리밍 정지 기능 테스트", () => {
   test("스트리밍 중 정지 버튼이 표시되어야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     // 느린 응답으로 모킹 (스트리밍 상태를 볼 수 있도록)
     await page.route("**/api/chat", async (route) => {
       // 응답을 지연시켜 정지 버튼을 볼 수 있게 함
@@ -364,6 +409,8 @@ test.describe("스트리밍 정지 기능 테스트", () => {
     });
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");
     await textarea.fill("테스트");
@@ -379,9 +426,12 @@ test.describe("스트리밍 정지 기능 테스트", () => {
 
 test.describe("웹 검색 기능 테스트", () => {
   test("웹 검색 결과가 표시되어야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     await mockChatAPI(page, createWebSearchStreamResponse());
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     // 웹 검색 토글 활성화
     await page.locator('button[role="switch"]').click();
@@ -399,6 +449,7 @@ test.describe("웹 검색 기능 테스트", () => {
 
 test.describe("연속 대화 테스트", () => {
   test("여러 메시지가 순서대로 표시되어야 함", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
     let callCount = 0;
     await page.route("**/api/chat", async (route) => {
       callCount++;
@@ -415,6 +466,8 @@ test.describe("연속 대화 테스트", () => {
     });
 
     await page.goto("/");
+    await page.waitForTimeout(300);
+    await setupClaudeProvider(page);
 
     // 첫 번째 메시지
     const textarea = page.getByPlaceholder("메시지를 입력하세요...");

@@ -8,12 +8,14 @@ import {
   MODELS_BY_PROVIDER,
   SearchQuery,
   Citation,
+  FallbackInfo,
 } from "@/types/chat";
 import { useStreamResponse } from "./useStreamResponse";
 
 interface UseChatOptions {
   apiKey?: string | null;
   provider: Provider;
+  fallbackApiKeys?: Partial<Record<Provider, string>>;
 }
 
 interface UseChatReturn {
@@ -33,6 +35,8 @@ interface UseChatReturn {
   stopGeneration: () => void;
   clearMessages: () => void;
   clearError: () => void;
+  fallbackInfo: FallbackInfo | null;
+  clearFallbackInfo: () => void;
 }
 
 function generateId(): string {
@@ -40,13 +44,18 @@ function generateId(): string {
 }
 
 export function useChat(options: UseChatOptions): UseChatReturn {
-  const { apiKey, provider: initialProvider } = options;
+  const { apiKey, provider: initialProvider, fallbackApiKeys } = options;
   const [messages, setMessages] = useState<Message[]>([]);
   const [provider, setProvider] = useState<Provider>(initialProvider);
   const [selectedModel, setSelectedModel] = useState<AIModel>(
     MODELS_BY_PROVIDER[initialProvider][0].id
   );
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [fallbackInfo, setFallbackInfo] = useState<FallbackInfo | null>(null);
+
+  const clearFallbackInfo = useCallback(() => {
+    setFallbackInfo(null);
+  }, []);
 
   const {
     streamText,
@@ -90,19 +99,45 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         content: msg.content,
       }));
 
+      // 새 메시지 전송 시 이전 폴백 정보 초기화
+      setFallbackInfo(null);
+
+      // 폴백 허용 여부: 다른 provider의 API 키가 있는 경우
+      const hasFallbackKeys = fallbackApiKeys && Object.keys(fallbackApiKeys).some(
+        (p) => p !== provider && fallbackApiKeys[p as Provider]
+      );
+
       try {
         const result = await startStream({
           messages: apiMessages,
           model: selectedModel,
           provider,
-          webSearchEnabled,
+          webSearchEnabled: provider === "groq" ? false : webSearchEnabled,
           apiKey: apiKey || undefined,
+          fallbackApiKeys,
+          allowFallback: !!hasFallbackKeys,
         });
 
         // 중단된 경우 사용자 메시지 제거
         if (result.aborted) {
           setMessages((prev) => prev.slice(0, -1));
           return true; // aborted
+        }
+
+        // 폴백 정보 저장 및 provider/model 변경
+        if (result.fallbackInfo?.occurred) {
+          setFallbackInfo(result.fallbackInfo);
+          // 폴백된 provider로 UI 상태 변경
+          const newProvider = result.fallbackInfo.toProvider;
+          setProvider(newProvider);
+          const firstModel = MODELS_BY_PROVIDER[newProvider][0];
+          if (firstModel) {
+            setSelectedModel(firstModel.id);
+          }
+          // Groq로 폴백된 경우 웹 검색 비활성화
+          if (newProvider === "groq") {
+            setWebSearchEnabled(false);
+          }
         }
 
         // Add assistant message after stream completes
@@ -133,6 +168,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       startStream,
       resetStream,
       apiKey,
+      fallbackApiKeys,
     ]
   );
 
@@ -162,5 +198,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     stopGeneration,
     clearMessages,
     clearError,
+    fallbackInfo,
+    clearFallbackInfo,
   };
 }
