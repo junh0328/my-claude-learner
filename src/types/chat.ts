@@ -86,6 +86,13 @@ export const MODELS_BY_PROVIDER: Record<Provider, ModelOption[]> = {
   groq: GROQ_MODELS,
 };
 
+// Provider별 기본 모델
+export const DEFAULT_MODELS: Record<Provider, AIModel> = {
+  gemini: 'gemini-2.5-flash',
+  groq: 'llama-3.3-70b-versatile',
+  claude: 'claude-sonnet-4-20250514',
+};
+
 // 전체 모델 목록
 export const ALL_MODELS: ModelOption[] = [
   ...CLAUDE_MODELS,

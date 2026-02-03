@@ -41,13 +41,11 @@ export function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent, streamingSearchQueries]);
 
-  const providerName = provider === "gemini" ? "Gemini" : "Claude";
-
   if (messages.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <p className="text-lg font-medium">{providerName}와 대화를 시작하세요</p>
+          <p className="text-lg font-medium">준희닷의 AI Chatbot과 대화를 시작하세요</p>
           <p className="text-sm mt-1">아래 입력창에 메시지를 입력해주세요</p>
         </div>
       </div>

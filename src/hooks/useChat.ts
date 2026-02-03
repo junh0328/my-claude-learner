@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Message,
   AIModel,
   Provider,
-  MODELS_BY_PROVIDER,
+  DEFAULT_MODELS,
   SearchQuery,
   Citation,
   FallbackInfo,
@@ -26,9 +26,7 @@ interface UseChatReturn {
   streamingSearchQueries: SearchQuery[];
   streamingCitations: Citation[];
   selectedModel: AIModel;
-  setSelectedModel: (model: AIModel) => void;
   provider: Provider;
-  setProvider: (provider: Provider) => void;
   webSearchEnabled: boolean;
   setWebSearchEnabled: (enabled: boolean) => void;
   sendMessage: (content: string) => Promise<boolean>;
@@ -48,7 +46,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [provider, setProvider] = useState<Provider>(initialProvider);
   const [selectedModel, setSelectedModel] = useState<AIModel>(
-    MODELS_BY_PROVIDER[initialProvider][0].id
+    DEFAULT_MODELS[initialProvider]
   );
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [fallbackInfo, setFallbackInfo] = useState<FallbackInfo | null>(null);
@@ -56,6 +54,12 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const clearFallbackInfo = useCallback(() => {
     setFallbackInfo(null);
   }, []);
+
+  // initialProvider 변경 시 내부 상태 동기화
+  useEffect(() => {
+    setProvider(initialProvider);
+    setSelectedModel(DEFAULT_MODELS[initialProvider]);
+  }, [initialProvider]);
 
   const {
     streamText,
@@ -68,15 +72,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     resetStream,
     clearError,
   } = useStreamResponse();
-
-  // Provider 변경 시 해당 provider의 첫 번째 모델로 자동 선택
-  const handleSetProvider = useCallback((newProvider: Provider) => {
-    setProvider(newProvider);
-    const firstModel = MODELS_BY_PROVIDER[newProvider][0];
-    if (firstModel) {
-      setSelectedModel(firstModel.id);
-    }
-  }, []);
 
   const sendMessage = useCallback(
     async (content: string): Promise<boolean> => {
@@ -130,10 +125,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           // 폴백된 provider로 UI 상태 변경
           const newProvider = result.fallbackInfo.toProvider;
           setProvider(newProvider);
-          const firstModel = MODELS_BY_PROVIDER[newProvider][0];
-          if (firstModel) {
-            setSelectedModel(firstModel.id);
-          }
+          setSelectedModel(DEFAULT_MODELS[newProvider]);
           // Groq로 폴백된 경우 웹 검색 비활성화
           if (newProvider === "groq") {
             setWebSearchEnabled(false);
@@ -189,9 +181,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     streamingSearchQueries: searchQueries,
     streamingCitations: citations,
     selectedModel,
-    setSelectedModel,
     provider,
-    setProvider: handleSetProvider,
     webSearchEnabled,
     setWebSearchEnabled,
     sendMessage,

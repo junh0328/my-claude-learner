@@ -276,6 +276,35 @@
   - [x] API Key 다이얼로그 Groq 탭 테스트
 - **테스트 결과**: 36/36 통과 ✅
 
+### Phase 15: UI 단순화 ✅
+
+- [x] 15.1 타입 정의 확장 (chat.ts)
+  - [x] DEFAULT_MODELS 상수 추가 (Provider별 기본 모델)
+- [x] 15.2 자동 Provider 선택 (useApiKey.ts)
+  - [x] getFirstAvailableProvider 함수 추가
+  - [x] selectedProvider를 계산된 값으로 변경 (FALLBACK_CHAIN 순서)
+  - [x] setSelectedProvider 제거
+  - [x] needsAnyApiKey 상태 추가
+- [x] 15.3 useChat 훅 수정
+  - [x] DEFAULT_MODELS 사용
+  - [x] setSelectedModel, setProvider return에서 제거
+  - [x] useEffect로 initialProvider 동기화
+- [x] 15.4 ChatInput 단순화
+  - [x] Provider 버튼 3개 제거 (Claude, Gemini, Groq)
+  - [x] 모델 선택 드롭다운 제거
+  - [x] 웹 검색 토글만 유지
+- [x] 15.5 ChatHeader 단순화
+  - [x] Provider별 아이콘/이름 → 고정 타이틀 "AI Chat"
+  - [x] 부제목: "준희닷의 AI Chatbot"
+- [x] 15.6 MessageList 수정
+  - [x] 초기 안내 메시지: "준희닷의 AI Chatbot과 대화를 시작하세요"
+- [x] 15.7 E2E 테스트 업데이트
+  - [x] Provider 버튼 테스트 제거
+  - [x] 모델 선택 테스트 제거
+  - [x] 자동 Provider 선택 테스트 추가
+  - [x] 헤더/안내 메시지 텍스트 수정
+- **테스트 결과**: 30/30 통과 ✅
+
 ---
 
 ## 파일 구조
@@ -292,10 +321,10 @@ src/
 ├── components/
 │   ├── chat/
 │   │   ├── ChatContainer.tsx     # Provider 상태 통합 관리
-│   │   ├── ChatHeader.tsx        # Provider별 아이콘/제목 표시
+│   │   ├── ChatHeader.tsx        # 고정 타이틀 "AI Chat"
 │   │   ├── MessageList.tsx
 │   │   ├── MessageBubble.tsx     # 검색 결과 + Citations 표시
-│   │   ├── ChatInput.tsx         # Provider 선택 + 모델 선택 + 웹 검색 토글
+│   │   ├── ChatInput.tsx         # 웹 검색 토글 + 전송 버튼
 │   │   ├── SearchResults.tsx     # 검색 쿼리 결과 UI
 │   │   ├── ErrorBanner.tsx       # 에러 표시 UI
 │   │   ├── InfoBanner.tsx        # 폴백 알림 배너
@@ -421,6 +450,7 @@ pnpm run dev
 | Phase 12 | ✅ 완료 | 2026-01-20 |
 | Phase 13 | ✅ 완료 | 2026-02-02 |
 | Phase 14 | ✅ 완료 | 2026-02-02 |
+| Phase 15 | ✅ 완료 | 2026-02-03 |
 
 ---
 

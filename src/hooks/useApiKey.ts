@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useSyncExternalStore } from "react";
-import { Provider } from "@/types/chat";
+import { useCallback, useSyncExternalStore } from "react";
+import { Provider, FALLBACK_CHAIN } from "@/types/chat";
 
 const API_KEYS_STORAGE_KEY = "ai_api_keys";
 
@@ -14,9 +14,9 @@ interface ApiKeys {
 interface UseApiKeyReturn {
   apiKeys: ApiKeys;
   selectedProvider: Provider;
-  setSelectedProvider: (provider: Provider) => void;
   currentApiKey: string | null;
   needsApiKey: (provider: Provider) => boolean;
+  needsAnyApiKey: boolean;
   isLoading: boolean;
   setApiKey: (provider: Provider, key: string) => void;
   clearApiKey: (provider: Provider) => void;
@@ -59,6 +59,16 @@ function getServerSnapshot(): string {
   return "{}";
 }
 
+// API 키가 있는 첫 번째 Provider 반환 (FALLBACK_CHAIN 순서)
+function getFirstAvailableProvider(apiKeys: ApiKeys): Provider {
+  for (const provider of FALLBACK_CHAIN) {
+    if (apiKeys[provider]) {
+      return provider;
+    }
+  }
+  return FALLBACK_CHAIN[0]; // 기본값: gemini
+}
+
 export function useApiKey(): UseApiKeyReturn {
   // useSyncExternalStore를 사용하여 localStorage 동기화
   const storedKeysString = useSyncExternalStore(
@@ -80,8 +90,12 @@ export function useApiKey(): UseApiKeyReturn {
     }
   })();
 
-  const [selectedProvider, setSelectedProvider] = useState<Provider>("gemini");
-  const [isLoading] = useState(false);
+  // API 키가 있는 첫 번째 Provider를 자동 선택
+  const selectedProvider = getFirstAvailableProvider(apiKeys);
+  const isLoading = false;
+
+  // 어떤 API 키도 없는 상태인지 확인
+  const needsAnyApiKey = !apiKeys.claude && !apiKeys.gemini && !apiKeys.groq;
 
   const setApiKey = useCallback((provider: Provider, key: string) => {
     const current = getStoredApiKeys();
@@ -123,9 +137,9 @@ export function useApiKey(): UseApiKeyReturn {
   return {
     apiKeys,
     selectedProvider,
-    setSelectedProvider,
     currentApiKey,
     needsApiKey,
+    needsAnyApiKey,
     isLoading,
     setApiKey,
     clearApiKey,

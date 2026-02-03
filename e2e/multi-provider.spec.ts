@@ -58,43 +58,6 @@ function createGroqSSEData(text: string): string {
   return events.join("");
 }
 
-// API 모킹 설정
-async function setupApiMock(
-  page: Page,
-  provider: "claude" | "gemini",
-  responseText: string
-) {
-  await page.route("**/api/chat", async (route) => {
-    const request = route.request();
-    const postData = request.postDataJSON();
-
-    // Provider 확인
-    if (postData.provider !== provider) {
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "Provider mismatch" }),
-      });
-      return;
-    }
-
-    const sseData =
-      provider === "claude"
-        ? createClaudeSSEData(responseText)
-        : createGeminiSSEData(responseText);
-
-    await route.fulfill({
-      status: 200,
-      contentType: "text/event-stream",
-      headers: {
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-      body: sseData,
-    });
-  });
-}
-
 // localStorage에 API 키 설정
 async function setApiKeys(
   page: Page,
@@ -110,147 +73,11 @@ async function setApiKeys(
   }, keys);
 }
 
-test.describe("Multi-Provider UI", () => {
-  test.beforeEach(async ({ page }) => {
-    // 테스트용 API 키 설정
-    await setApiKeys(page, {
-      claude: "sk-ant-test-key",
-      gemini: "AIzaSyTestKey",
-      groq: "gsk_test-key",
-    });
-    await page.goto("/");
-    // 다이얼로그가 닫힐 때까지 대기
-    await page.waitForTimeout(500);
-  });
+test.describe("자동 Provider 선택", () => {
+  test("Gemini 키만 있으면 Gemini가 자동 선택된다", async ({ page }) => {
+    await setApiKeys(page, { gemini: "AIzaSyTestKey" });
 
-  test("Provider 선택 버튼이 표시된다", async ({ page }) => {
-    // Provider 선택 버튼 그룹 내의 버튼들 확인
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    await expect(providerGroup).toBeVisible();
-
-    // Claude 버튼
-    await expect(providerGroup.locator("button", { hasText: "Claude" })).toBeVisible();
-
-    // Gemini 버튼
-    await expect(providerGroup.locator("button", { hasText: "Gemini" })).toBeVisible();
-
-    // Groq 버튼
-    await expect(providerGroup.locator("button", { hasText: "Groq" })).toBeVisible();
-  });
-
-  test("기본 Provider는 Gemini이다", async ({ page }) => {
-    // Provider 그룹 내 Gemini 버튼이 활성화 상태
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    const geminiButton = providerGroup.locator("button", { hasText: "Gemini" });
-    await expect(geminiButton).toHaveClass(/bg-provider-gemini/);
-
-    // 헤더에 Gemini Chat 표시
-    await expect(page.locator("h1")).toContainText("Gemini Chat");
-  });
-
-  test("Claude로 전환하면 UI가 변경된다", async ({ page }) => {
-    // Provider 그룹 내 Claude 버튼 클릭
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    const claudeButton = providerGroup.locator("button", { hasText: "Claude" });
-    await claudeButton.click();
-
-    // Claude 버튼이 활성화 상태
-    await expect(claudeButton).toHaveClass(/bg-provider-claude/);
-
-    // 헤더에 Claude Chat 표시
-    await expect(page.locator("h1")).toContainText("Claude Chat");
-  });
-
-  test("Groq로 전환하면 UI가 변경된다", async ({ page }) => {
-    // Provider 그룹 내 Groq 버튼 클릭
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    const groqButton = providerGroup.locator("button", { hasText: "Groq" });
-    await groqButton.click();
-
-    // Groq 버튼이 활성화 상태
-    await expect(groqButton).toHaveClass(/bg-provider-groq/);
-
-    // 헤더에 Groq Chat 표시
-    await expect(page.locator("h1")).toContainText("Groq Chat");
-  });
-
-  test("Groq 선택 시 웹 검색이 비활성화된다", async ({ page }) => {
-    // Groq로 전환
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    const groqButton = providerGroup.locator("button", { hasText: "Groq" });
-    await groqButton.click();
-
-    // 웹 검색 라벨에 "(미지원)" 표시 확인
-    await expect(page.locator("label[for='web-search']")).toContainText("(미지원)");
-
-    // 웹 검색 스위치가 비활성화 상태
-    const webSearchSwitch = page.locator("#web-search");
-    await expect(webSearchSwitch).toBeDisabled();
-  });
-
-  test("Provider 변경 시 모델 목록이 변경된다", async ({ page }) => {
-    // Gemini 모델 확인 (기본 Provider)
-    const modelSelect = page.locator('[role="combobox"]');
-    await modelSelect.click();
-    await expect(page.locator('[role="option"]', { hasText: "Gemini 2.5 Flash Lite" })).toBeVisible();
-    await page.keyboard.press("Escape");
-
-    // Claude로 전환
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    const claudeButton = providerGroup.locator("button", { hasText: "Claude" });
-    await claudeButton.click();
-
-    // Claude 모델 확인
-    await modelSelect.click();
-    await expect(page.locator('[role="option"]', { hasText: "Claude Sonnet 4" })).toBeVisible();
-    await page.keyboard.press("Escape");
-
-    // Groq로 전환
-    const groqButton = providerGroup.locator("button", { hasText: "Groq" });
-    await groqButton.click();
-
-    // Groq 모델 확인
-    await modelSelect.click();
-    await expect(page.locator('[role="option"]', { hasText: "Llama 3.3 70B" })).toBeVisible();
-  });
-});
-
-test.describe("Multi-Provider 스트리밍", () => {
-  test("Claude 스트리밍이 정상 동작한다", async ({ page }) => {
-    await setApiKeys(page, {
-      claude: "sk-ant-test-key",
-      gemini: "AIzaSyTestKey",
-    });
-
-    // API 모킹을 페이지 로드 전에 설정
-    await setupApiMock(page, "claude", "안녕하세요! Claude입니다.");
-
-    await page.goto("/");
-    await page.waitForTimeout(500);
-
-    // Claude로 전환 (기본은 Gemini)
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    const claudeButton = providerGroup.locator("button", { hasText: "Claude" });
-    await claudeButton.click();
-
-    // 메시지 전송
-    const textarea = page.locator("textarea");
-    await textarea.fill("안녕하세요");
-
-    // 전송 버튼 클릭 (SVG 아이콘이 있는 버튼)
-    const sendButton = page.locator("button.bg-provider-claude").last();
-    await sendButton.click();
-
-    // 응답 확인
-    await expect(page.locator(".prose")).toContainText("Claude입니다", { timeout: 10000 });
-  });
-
-  test("Gemini 스트리밍이 정상 동작한다", async ({ page }) => {
-    await setApiKeys(page, {
-      gemini: "AIzaSyTestKey",
-    });
-
-    // API 모킹 - 모든 provider 요청 허용
+    // API 모킹
     await page.route("**/api/chat", async (route) => {
       const sseData = createGeminiSSEData("안녕하세요! Gemini입니다.");
       await route.fulfill({
@@ -267,23 +94,21 @@ test.describe("Multi-Provider 스트리밍", () => {
     await page.goto("/");
     await page.waitForTimeout(500);
 
-    // Gemini가 기본 Provider이므로 바로 메시지 전송
+    // 초기 안내 메시지 확인
+    await expect(page.getByText("준희닷의 AI Chatbot과 대화를 시작하세요")).toBeVisible();
+
+    // 메시지 전송
     const textarea = page.locator("textarea");
     await textarea.fill("안녕하세요");
-
-    // 전송 버튼 클릭
-    const sendButton = page.locator("button.bg-provider-gemini").last();
+    const sendButton = page.locator("button.bg-provider-gemini");
     await sendButton.click();
 
-    // 응답 확인
+    // Gemini 응답 확인
     await expect(page.locator(".prose")).toContainText("Gemini입니다", { timeout: 10000 });
   });
 
-  test("Groq 스트리밍이 정상 동작한다", async ({ page }) => {
-    await setApiKeys(page, {
-      gemini: "AIzaSyTestKey",  // 기본 provider인 Gemini 키도 설정
-      groq: "gsk_test-key",
-    });
+  test("Groq 키만 있으면 Groq가 자동 선택된다", async ({ page }) => {
+    await setApiKeys(page, { groq: "gsk_test-key" });
 
     // API 모킹
     await page.route("**/api/chat", async (route) => {
@@ -302,21 +127,83 @@ test.describe("Multi-Provider 스트리밍", () => {
     await page.goto("/");
     await page.waitForTimeout(500);
 
-    // Groq로 전환
-    const providerGroup = page.locator(".flex.rounded-lg.border");
-    const groqButton = providerGroup.locator("button", { hasText: "Groq" });
-    await groqButton.click();
+    // 초기 안내 메시지 확인
+    await expect(page.getByText("준희닷의 AI Chatbot과 대화를 시작하세요")).toBeVisible();
+
+    // 웹 검색 비활성화 확인
+    await expect(page.locator("label[for='web-search']")).toContainText("(미지원)");
 
     // 메시지 전송
     const textarea = page.locator("textarea");
     await textarea.fill("안녕하세요");
-
-    // 전송 버튼 클릭
-    const sendButton = page.locator("button.bg-provider-groq").last();
+    const sendButton = page.locator("button.bg-provider-groq");
     await sendButton.click();
 
-    // 응답 확인
+    // Groq 응답 확인
     await expect(page.locator(".prose")).toContainText("Groq입니다", { timeout: 10000 });
+  });
+
+  test("Claude 키만 있으면 Claude가 자동 선택된다", async ({ page }) => {
+    await setApiKeys(page, { claude: "sk-ant-test-key" });
+
+    // API 모킹
+    await page.route("**/api/chat", async (route) => {
+      const sseData = createClaudeSSEData("안녕하세요! Claude입니다.");
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        headers: {
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+        body: sseData,
+      });
+    });
+
+    await page.goto("/");
+    await page.waitForTimeout(500);
+
+    // 초기 안내 메시지 확인
+    await expect(page.getByText("준희닷의 AI Chatbot과 대화를 시작하세요")).toBeVisible();
+
+    // 메시지 전송
+    const textarea = page.locator("textarea");
+    await textarea.fill("안녕하세요");
+    const sendButton = page.locator("button.bg-provider-claude");
+    await sendButton.click();
+
+    // Claude 응답 확인
+    await expect(page.locator(".prose")).toContainText("Claude입니다", { timeout: 10000 });
+  });
+
+  test("FALLBACK_CHAIN 순서대로 선택된다 (Gemini > Groq > Claude)", async ({ page }) => {
+    // 모든 키 설정 - Gemini가 우선 선택되어야 함
+    await setApiKeys(page, {
+      claude: "sk-ant-test-key",
+      gemini: "AIzaSyTestKey",
+      groq: "gsk_test-key",
+    });
+
+    await page.goto("/");
+    await page.waitForTimeout(500);
+
+    // Gemini가 선택됨 (FALLBACK_CHAIN에서 첫 번째) - 전송 버튼 색상으로 확인
+    await expect(page.getByText("준희닷의 AI Chatbot과 대화를 시작하세요")).toBeVisible();
+    await expect(page.locator("button.bg-provider-gemini")).toBeVisible();
+  });
+
+  test("Groq와 Claude 키만 있으면 Groq가 선택된다", async ({ page }) => {
+    await setApiKeys(page, {
+      claude: "sk-ant-test-key",
+      groq: "gsk_test-key",
+    });
+
+    await page.goto("/");
+    await page.waitForTimeout(500);
+
+    // Groq가 선택됨 (FALLBACK_CHAIN에서 Gemini 다음) - 전송 버튼 색상으로 확인
+    await expect(page.getByText("준희닷의 AI Chatbot과 대화를 시작하세요")).toBeVisible();
+    await expect(page.locator("button.bg-provider-groq")).toBeVisible();
   });
 });
 
@@ -362,11 +249,11 @@ test.describe("429 폴백 기능", () => {
     await page.goto("/");
     await page.waitForTimeout(500);
 
-    // Gemini가 기본 Provider이므로 바로 메시지 전송
+    // Gemini가 자동 선택됨
     const textarea = page.locator("textarea");
     await textarea.fill("안녕하세요");
 
-    const sendButton = page.locator("button.bg-provider-gemini").last();
+    const sendButton = page.locator("button.bg-provider-gemini");
     await sendButton.click();
 
     // Groq 응답 확인
@@ -424,7 +311,7 @@ test.describe("429 폴백 기능", () => {
     const textarea = page.locator("textarea");
     await textarea.fill("안녕하세요");
 
-    const sendButton = page.locator("button.bg-provider-gemini").last();
+    const sendButton = page.locator("button.bg-provider-gemini");
     await sendButton.click();
 
     // Claude 응답 확인
@@ -437,8 +324,8 @@ test.describe("429 폴백 기능", () => {
     expect(requestCount).toBe(3);
   });
 
-  test("Claude 키 없을 때 429 발생 시 에러 표시", async ({ page }) => {
-    // Gemini 키만 설정 (Claude 키 없음)
+  test("폴백 키 없을 때 429 발생 시 에러 표시", async ({ page }) => {
+    // Gemini 키만 설정 (다른 키 없음)
     await setApiKeys(page, {
       gemini: "AIzaSyTestKey",
     });
@@ -461,7 +348,7 @@ test.describe("429 폴백 기능", () => {
     const textarea = page.locator("textarea");
     await textarea.fill("안녕하세요");
 
-    const sendButton = page.locator("button.bg-provider-gemini").last();
+    const sendButton = page.locator("button.bg-provider-gemini");
     await sendButton.click();
 
     // ErrorBanner 표시 확인 (폴백 없이 에러)
@@ -510,7 +397,7 @@ test.describe("429 폴백 기능", () => {
     const textarea = page.locator("textarea");
     await textarea.fill("테스트");
 
-    const sendButton = page.locator("button.bg-provider-gemini").last();
+    const sendButton = page.locator("button.bg-provider-gemini");
     await sendButton.click();
 
     // InfoBanner 표시 확인
@@ -548,7 +435,7 @@ test.describe("API Key 다이얼로그", () => {
   test("API 키 저장 후 다이얼로그가 닫힌다", async ({ page }) => {
     await page.goto("/");
 
-    // Gemini 탭을 클릭하여 Gemini 키 입력 (기본 Provider가 Gemini)
+    // Gemini 탭을 클릭하여 Gemini 키 입력
     await page.locator('[role="tab"]', { hasText: "Gemini" }).click();
 
     // Gemini 키 입력
@@ -563,8 +450,8 @@ test.describe("API Key 다이얼로그", () => {
   });
 
   test("설정 버튼으로 다이얼로그를 열 수 있다", async ({ page }) => {
-    // Gemini 키가 있어야 다이얼로그가 자동으로 열리지 않음 (기본 Provider가 Gemini)
-    await setApiKeys(page, { claude: "sk-ant-test-key", gemini: "AIzaSyTestKey" });
+    // Gemini 키가 있어야 다이얼로그가 자동으로 열리지 않음
+    await setApiKeys(page, { gemini: "AIzaSyTestKey" });
     await page.goto("/");
     await page.waitForTimeout(500);
 
