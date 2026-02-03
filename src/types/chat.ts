@@ -166,3 +166,32 @@ export interface StreamEvent {
     citations?: Citation[];
   };
 }
+
+// 채팅 세션 타입
+export interface ChatSession {
+  id: string;
+  title: string; // 첫 사용자 메시지 기반 자동 생성
+  messages: Message[];
+  provider: Provider;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// localStorage 직렬화용 타입
+export interface SerializedMessage {
+  id: string;
+  role: Role;
+  content: string;
+  createdAt: string; // ISO string
+  searchQueries?: SearchQuery[];
+  citations?: Citation[];
+}
+
+export interface SerializedChatSession {
+  id: string;
+  title: string;
+  messages: SerializedMessage[];
+  provider: Provider;
+  createdAt: string; // ISO string
+  updatedAt: string; // ISO string
+}

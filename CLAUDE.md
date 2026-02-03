@@ -305,6 +305,48 @@
   - [x] 헤더/안내 메시지 텍스트 수정
 - **테스트 결과**: 30/30 통과 ✅
 
+### Phase 16: 채팅 히스토리 기능 ✅
+
+- [x] 16.1 타입 정의 확장 (chat.ts)
+  - [x] ChatSession 타입 추가 (id, title, messages, provider, createdAt, updatedAt)
+  - [x] SerializedMessage, SerializedChatSession 타입 추가 (Date → ISO string)
+- [x] 16.2 useHistory 훅 구현 (useHistory.ts)
+  - [x] useSyncExternalStore로 localStorage 동기화
+  - [x] 직렬화/역직렬화 헬퍼 함수
+  - [x] createSession, updateSession, deleteSession, selectSession 함수
+  - [x] 제목 자동 생성 (첫 메시지 30자 요약)
+  - [x] 최대 50개 세션 제한
+  - [x] QuotaExceededError 처리
+- [x] 16.3 useChat 훅 수정
+  - [x] initialMessages, onMessagesChange 옵션 추가
+  - [x] useRef로 onMessagesChange 참조 저장 (dependency 문제 방지)
+  - [x] initialMessages ID 기반 세션 전환 감지
+  - [x] 폴백 후 올바른 provider API 키 사용 (effectiveApiKey)
+- [x] 16.4 HistorySidebar 컴포넌트 생성
+  - [x] shadcn Sheet 기반 좌측 사이드바
+  - [x] 세션 목록 표시 (제목, provider 아이콘, 메시지 수, 시간)
+  - [x] 새 대화 버튼
+  - [x] 세션 선택 및 삭제 기능
+  - [x] 호버 시 삭제 버튼 표시
+- [x] 16.5 ChatHeader 수정
+  - [x] onOpenHistory prop 추가
+  - [x] 햄버거 메뉴 버튼 (☰) 추가
+- [x] 16.6 ChatContainer 통합
+  - [x] useHistory 훅 연동
+  - [x] 앱 시작 시 세션 자동 생성
+  - [x] 대화 초기화 → 새 세션 생성
+  - [x] 메시지 변경 시 세션 자동 저장
+- [x] 16.7 E2E 테스트 (e2e/history.spec.ts)
+  - [x] 새 대화 시 세션 자동 생성
+  - [x] 메시지 전송 시 히스토리 저장
+  - [x] 사이드바 열기/닫기
+  - [x] 새 대화 버튼으로 새 세션 생성
+  - [x] 세션 선택 시 메시지 로드
+  - [x] 세션 삭제 기능
+  - [x] 대화 초기화 버튼 → 새 세션 시작
+  - [x] 새로고침 후 메시지 유지
+- **테스트 결과**: 38/38 통과 ✅
+
 ---
 
 ## 파일 구조
@@ -330,6 +372,7 @@ src/
 │   │   ├── InfoBanner.tsx        # 폴백 알림 배너
 │   │   ├── CodeBlock.tsx         # 구문 강조 + 복사 버튼
 │   │   ├── ApiKeyDialog.tsx      # API 키 입력 모달 (3-탭 UI: Claude/Gemini/Groq)
+│   │   ├── HistorySidebar.tsx    # 채팅 히스토리 사이드바 (Sheet 기반)
 │   │   └── MarkdownRenderer.tsx
 │   └── ui/
 │       ├── button.tsx            # shadcn
@@ -340,11 +383,13 @@ src/
 │       ├── dialog.tsx            # shadcn (모달 다이얼로그)
 │       ├── input.tsx             # shadcn (텍스트 입력)
 │       ├── tabs.tsx              # shadcn (Provider 탭)
+│       ├── sheet.tsx             # shadcn (사이드바 Sheet)
 │       └── loading-dots.tsx
 ├── hooks/
 │   ├── useStreamResponse.ts      # Provider별 스트림 파싱 + 체인 폴백 로직
 │   ├── useChat.ts                # Provider 상태 + 폴백 정보 관리
-│   └── useApiKey.ts              # Provider별 API 키 관리 (기본: Gemini)
+│   ├── useApiKey.ts              # Provider별 API 키 관리 (기본: Gemini)
+│   └── useHistory.ts             # 채팅 히스토리 관리 (localStorage + useSyncExternalStore)
 ├── types/
 │   └── chat.ts                   # Provider, AIModel, FALLBACK_CHAIN 타입 포함
 └── lib/
@@ -353,7 +398,8 @@ src/
 e2e/                              # Playwright E2E 테스트
 ├── chat.spec.ts                  # UI 기본 기능 테스트
 ├── sse-streaming.spec.ts         # SSE 스트리밍 테스트 (Claude)
-└── multi-provider.spec.ts        # Multi-Provider 테스트
+├── multi-provider.spec.ts        # Multi-Provider 테스트
+└── history.spec.ts               # 채팅 히스토리 테스트
 ```
 
 ---
@@ -451,6 +497,7 @@ pnpm run dev
 | Phase 13 | ✅ 완료 | 2026-02-02 |
 | Phase 14 | ✅ 완료 | 2026-02-02 |
 | Phase 15 | ✅ 완료 | 2026-02-03 |
+| Phase 16 | ✅ 완료 | 2026-02-03 |
 
 ---
 
@@ -475,6 +522,7 @@ pnpm run dev
 - **Gemini 기본 Provider** (앱 시작 시 Gemini 선택)
 - **체인 폴백 시스템** (Gemini → Groq → Claude 순차 폴백)
 - **Groq Provider** (Llama 3.3 70B, Llama 3.1 8B)
+- **채팅 히스토리** (localStorage 저장, 세션 관리, 새로고침 유지)
 
 ### 기술적 특징
 
@@ -492,10 +540,11 @@ pnpm run dev
 - **useSyncExternalStore를 활용한 localStorage 동기화**
 - **체인 폴백 시스템** (Gemini → Groq → Claude 자동 전환)
 - **Groq OpenAI 호환 API** 스트림 파싱
+- **채팅 히스토리 시스템** (세션 관리, 직렬화/역직렬화, 최대 50개 세션)
 
 ### 향후 개선 가능 사항
 
-- 대화 기록 저장 (localStorage 또는 DB)
+- ~~대화 기록 저장 (localStorage 또는 DB)~~ (Phase 16에서 구현됨)
 - 다크 모드 토글 버튼
 - 메시지 수정/삭제 기능
 - 파일 업로드 지원

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Message,
   AIModel,
@@ -16,6 +16,8 @@ interface UseChatOptions {
   apiKey?: string | null;
   provider: Provider;
   fallbackApiKeys?: Partial<Record<Provider, string>>;
+  initialMessages?: Message[];
+  onMessagesChange?: (messages: Message[]) => void;
 }
 
 interface UseChatReturn {
@@ -42,8 +44,14 @@ function generateId(): string {
 }
 
 export function useChat(options: UseChatOptions): UseChatReturn {
-  const { apiKey, provider: initialProvider, fallbackApiKeys } = options;
-  const [messages, setMessages] = useState<Message[]>([]);
+  const {
+    apiKey,
+    provider: initialProvider,
+    fallbackApiKeys,
+    initialMessages,
+    onMessagesChange,
+  } = options;
+  const [messages, setMessages] = useState<Message[]>(initialMessages || []);
   const [provider, setProvider] = useState<Provider>(initialProvider);
   const [selectedModel, setSelectedModel] = useState<AIModel>(
     DEFAULT_MODELS[initialProvider]
@@ -55,11 +63,43 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     setFallbackInfo(null);
   }, []);
 
+  // onMessagesChange 참조를 ref로 저장 (dependency 문제 방지)
+  const onMessagesChangeRef = useRef(onMessagesChange);
+  onMessagesChangeRef.current = onMessagesChange;
+
+  // initialMessages의 첫 메시지 ID를 추적하여 세션 전환 감지
+  const initialMessagesIdRef = useRef<string | null>(null);
+
   // initialProvider 변경 시 내부 상태 동기화
   useEffect(() => {
     setProvider(initialProvider);
     setSelectedModel(DEFAULT_MODELS[initialProvider]);
   }, [initialProvider]);
+
+  // initialMessages 변경 시 messages 동기화 (세션 전환 시)
+  useEffect(() => {
+    if (initialMessages) {
+      // 첫 메시지 ID로 세션 전환 감지 (같은 세션이면 업데이트 안 함)
+      const newFirstId = initialMessages[0]?.id || null;
+      if (newFirstId !== initialMessagesIdRef.current) {
+        initialMessagesIdRef.current = newFirstId;
+        setMessages(initialMessages);
+      }
+    } else {
+      // initialMessages가 없으면 빈 배열로 초기화
+      if (initialMessagesIdRef.current !== null) {
+        initialMessagesIdRef.current = null;
+        setMessages([]);
+      }
+    }
+  }, [initialMessages]);
+
+  // messages 변경 시 onMessagesChange 콜백 호출
+  useEffect(() => {
+    if (onMessagesChangeRef.current && messages.length > 0) {
+      onMessagesChangeRef.current(messages);
+    }
+  }, [messages]);
 
   const {
     streamText,
@@ -102,13 +142,17 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         (p) => p !== provider && fallbackApiKeys[p as Provider]
       );
 
+      // 현재 provider에 맞는 API 키 결정
+      // 폴백 후에는 provider가 변경될 수 있으므로 fallbackApiKeys에서 찾음
+      const effectiveApiKey = fallbackApiKeys?.[provider] || apiKey || undefined;
+
       try {
         const result = await startStream({
           messages: apiMessages,
           model: selectedModel,
           provider,
           webSearchEnabled: provider === "groq" ? false : webSearchEnabled,
-          apiKey: apiKey || undefined,
+          apiKey: effectiveApiKey,
           fallbackApiKeys,
           allowFallback: !!hasFallbackKeys,
         });

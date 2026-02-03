@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useApiKey } from "@/hooks/useApiKey";
+import { useHistory } from "@/hooks/useHistory";
 import { ChatHeader } from "./ChatHeader";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { ErrorBanner } from "./ErrorBanner";
 import { InfoBanner } from "./InfoBanner";
 import { ApiKeyDialog } from "./ApiKeyDialog";
-import { Provider } from "@/types/chat";
+import { HistorySidebar } from "./HistorySidebar";
+import { Provider, Message } from "@/types/chat";
 
 export function ChatContainer() {
   const {
@@ -23,10 +25,31 @@ export function ChatContainer() {
     getFallbackApiKeys,
   } = useApiKey();
 
+  const {
+    sessions,
+    currentSessionId,
+    currentSession,
+    createSession,
+    updateSession,
+    deleteSession,
+    selectSession,
+  } = useHistory();
+
   const [isApiKeyDialogOpen, setIsApiKeyDialogOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // 폴백용 API 키들 가져오기
   const fallbackApiKeys = getFallbackApiKeys();
+
+  // 메시지 변경 시 세션 업데이트
+  const handleMessagesChange = useCallback(
+    (messages: Message[]) => {
+      if (currentSessionId && messages.length > 0) {
+        updateSession(currentSessionId, messages);
+      }
+    },
+    [currentSessionId, updateSession]
+  );
 
   const {
     messages,
@@ -47,7 +70,22 @@ export function ChatContainer() {
     apiKey: currentApiKey,
     provider: selectedProvider,
     fallbackApiKeys,
+    initialMessages: currentSession?.messages,
+    onMessagesChange: handleMessagesChange,
   });
+
+  // 앱 시작 시 세션이 없으면 자동 생성
+  useEffect(() => {
+    if (!isLoadingApiKey && !needsAnyApiKey && !currentSessionId && sessions.length === 0) {
+      createSession(selectedProvider);
+    }
+  }, [isLoadingApiKey, needsAnyApiKey, currentSessionId, sessions.length, createSession, selectedProvider]);
+
+  // 새 대화 시작 (대화 초기화 버튼)
+  const handleNewSession = useCallback(() => {
+    createSession(selectedProvider);
+    clearMessages();
+  }, [createSession, selectedProvider, clearMessages]);
 
   // API 키가 필요한지 확인 (다이얼로그 자동 표시용)
   const shouldShowApiKeyDialog = isApiKeyDialogOpen || needsAnyApiKey;
@@ -92,10 +130,21 @@ export function ChatContainer() {
         hasGroqKey={hasApiKey("groq")}
       />
 
+      <HistorySidebar
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onSelectSession={selectSession}
+        onDeleteSession={deleteSession}
+        onNewSession={handleNewSession}
+      />
+
       <div className="flex h-screen flex-col bg-background">
         <ChatHeader
-          onClear={clearMessages}
+          onClear={handleNewSession}
           onOpenApiKeySettings={() => setIsApiKeyDialogOpen(true)}
+          onOpenHistory={() => setIsHistoryOpen(true)}
           messageCount={messages.length}
         />
 

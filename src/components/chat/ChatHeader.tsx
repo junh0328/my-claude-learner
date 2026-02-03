@@ -5,13 +5,37 @@ import { Button } from '@/components/ui/button';
 interface ChatHeaderProps {
   onClear: () => void;
   onOpenApiKeySettings: () => void;
+  onOpenHistory: () => void;
   messageCount: number;
 }
 
-export function ChatHeader({ onClear, onOpenApiKeySettings, messageCount }: ChatHeaderProps) {
+export function ChatHeader({ onClear, onOpenApiKeySettings, onOpenHistory, messageCount }: ChatHeaderProps) {
   return (
     <header className='flex items-center justify-between border-b border-border bg-background px-4 py-3'>
       <div className='flex items-center gap-3'>
+        <Button
+          variant='ghost'
+          size='icon'
+          onClick={onOpenHistory}
+          title='대화 기록'
+          className='mr-1'
+        >
+          <svg
+            xmlns='http://www.w3.org/2000/svg'
+            width='20'
+            height='20'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+            strokeLinecap='round'
+            strokeLinejoin='round'
+          >
+            <line x1='4' x2='20' y1='12' y2='12' />
+            <line x1='4' x2='20' y1='6' y2='6' />
+            <line x1='4' x2='20' y1='18' y2='18' />
+          </svg>
+        </Button>
         <div className='flex size-10 items-center justify-center rounded-full bg-primary'>
           <svg
             xmlns='http://www.w3.org/2000/svg'
