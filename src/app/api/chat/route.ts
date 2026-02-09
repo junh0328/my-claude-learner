@@ -277,35 +277,12 @@ async function handleGroqRequest(
   return createStreamResponse(response);
 }
 
-// 공통 스트림 응답 생성
+// AI API의 SSE 스트림을 클라이언트로 직접 패스스루.
+// response.body를 가공 없이 그대로 전달하여:
+// 1) 불필요한 TextDecoder → TextEncoder 변환 오버헤드 제거
+// 2) chunk 순서가 중간 처리 과정에서 뒤바뀔 가능성 원천 차단
 function createStreamResponse(response: Response): Response {
-  const stream = new ReadableStream({
-    async start(controller) {
-      const reader = response.body?.getReader();
-      if (!reader) {
-        controller.close();
-        return;
-      }
-
-      const decoder = new TextDecoder();
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          controller.enqueue(new TextEncoder().encode(chunk));
-        }
-      } catch (error) {
-        console.error("Stream error:", error);
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(stream, {
+  return new Response(response.body, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
